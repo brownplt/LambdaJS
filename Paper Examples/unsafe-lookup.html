@@ -1,0 +1,16 @@
+<html>
+
+<body>
+
+<script type="text/javascript">
+lookupJS = function(obj, field) { 
+  if (field === "XMLHttpRequest") { return undefined }
+  else { return obj[field] } }
+
+x = lookupJS(window, { toString: function() { return "XMLHttpRequest" } });
+document.write(x === window.XMLHttpRequest);
+</script>
+
+</body>
+
+</html>

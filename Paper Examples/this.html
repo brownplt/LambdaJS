@@ -1,0 +1,21 @@
+<html>
+
+<body>
+
+<script type="text/javascript">
+var obj = {
+  "x": 0,
+  "setX": function(x) { this.x = x } };
+
+document.write(window.x);
+obj.setX(10);
+document.write(obj.x);
+var f = obj.setX;
+f(90);
+document.write(obj.x);
+document.write(window.x);
+</script>
+
+</body>
+
+</html>
