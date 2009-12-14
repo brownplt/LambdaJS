@@ -1,0 +1,13 @@
+LambdaJS
+========
+
+- Redex/ contains our mechanized semantics in PLT Redex.  Tested with 
+  PLT Scheme 4.2.3.
+
+- LambdaJS/ contains an implementation of desugaring.  Tested with GHC 6.10.4.
+  This software uses packages available on Hackage.
+
+- DisableXHR/ contains an implementation of our safe-subset example.  Tested
+  with GHC 6.10.4.  This tool requires the LambdaJS Haskell package to be built
+  and installed first.
+
