@@ -1,0 +1,9 @@
+#!/bin/bash
+
+infile=$1
+if [ $# -le 0 ] ; then
+  infile=/dev/stdin
+fi
+
+../dist/build/lambdaJS/lambdaJS --desugar < $infile | \
+  ../../Redex/interp-shell.ss

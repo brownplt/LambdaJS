@@ -1,0 +1,3 @@
+#!/bin/bash
+
+/usr/bin/env java -jar rhino-1_5R5.jar $@
