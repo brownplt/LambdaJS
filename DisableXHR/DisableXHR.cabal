@@ -1,0 +1,33 @@
+Name:           LambdaJS
+Version:        1.0
+Cabal-Version:	>= 1.2.3
+Copyright:      Copyright (c) 2009 Arjun Guha and Claudiu Saftoiu
+License:        GPL
+License-file:   ../LICENSE
+Author:         Arjun Guha, Claudiu Saftoiu
+Maintainer:     Arjun Guha <arjun@cs.brown.edu>
+Homepage:       http://www.cs.brown.edu/~arjun/
+Stability:      experimental
+Category:       Language
+Build-Type:     Custom
+Synopsis:       Defines a subset of JavaScript that disables access to 
+                window.XMLHttpRequest
+Description:
+
+
+Executable LambdaJS-DisableXHR
+  Main-Is: DisableXHR.hs
+  Hs-Source-Dirs: src
+  Build-Depends:
+    base >= 4 && < 5,
+    mtl >= 1.1.0.1,
+    parsec < 3.0.0,
+    pretty >= 0.1, 
+    containers >= 0.1,
+    syb >= 0.1,
+    WebBits == 2.0,
+    LambdaJS == 1.0
+  ghc-options:
+    -fwarn-incomplete-patterns
+  Extensions:     
+    Generics DeriveDataTypeable Rank2Types FlexibleInstances
