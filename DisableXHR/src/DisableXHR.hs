@@ -1,18 +1,12 @@
 module Main where
 
+import qualified Data.Map as M
+import Data.List
 import BrownPLT.JavaScript.Semantics.Desugar
-import Control.Monad
 import BrownPLT.JavaScript.Semantics.Syntax
 import BrownPLT.JavaScript.Semantics.RemoveHOAS
 import BrownPLT.JavaScript.Semantics.PrettyPrint
-import qualified Data.Map as M
-import qualified Data.Set as S
-import Debug.Trace
 import MakeSafeSubset
-import Control.Monad.State
-import Data.Either
-import Data.List
-
 
 type Env = M.Map Ident T
 
@@ -127,8 +121,8 @@ typeCheck env e = case e of
      t2 <- typeCheck env e2
      t3 <- typeCheck env e3
      return JS
-   ELabel lbl e -> typeCheck env e -- TODO : wrong
-   EBreak lbl e -> typeCheck env e -- TODO : wrong
+   ELabel lbl e -> typeCheck env e >> return JS
+   EBreak lbl e -> typeCheck env e >> return JS
    EThrow e -> typeCheck env e
    ELet1{} -> error "unexpected ELet1 (removeHOAS not called?)"
    ELet2{} -> error "unexpected ELet2 (removeHOAS not called?)"

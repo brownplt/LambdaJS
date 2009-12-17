@@ -1,0 +1,103 @@
+# Added December 17, 2009
+$ ./LambdaJS-DisableXHR
+Safe Forms
+==========
+x < y
+x <= y
+x > y
+x >= y
+x instanceof y
+x == y
+x != y
+x === y
+x !== y
+x && y
+x || y
+x * y
+x / y
+x % y
+x - y
+x << y
+x >> y
+x >>> y
+x & y
+x ^ y
+x | y
+x + y
+x = y
+x += y
+x -= y
+x *= y
+x /= y
+x %= y
+x <<= y
+x >>= y
+x >>>= y
+x &= y
+x ^= y
+x |= y
+!x
+~x
++x
+-x
+typeof x
+void x
+delete x
+++x
+--x
+x++
+x--
+this
+obj.field = e
+obj[field] = e
+obj.x
+new obj(arg)
+e1 ? e2 : e3
+f(arg)
+new f(arg)
+{ x: e1, y: e2 }
+function(x) { body }
+e1 ? e2 : e3
+{ s1 ; s2 }
+if (e1) { s1 }
+if (e1) { s1 } else { s2 } 
+switch (e1) { case foo: s1
+ case bar: s2 }
+while (e1) { s1 }
+break lbl
+break
+continue lbl
+continue
+myLabel: s
+for (var x in e) { s }
+for (x in e) { s }
+for (var x = e1; e2; e3) { s }
+try { s1 } catch(x) { s2 }
+try { s1 } finally { s2 }
+throw e
+return e
+var x = e
+
+Unsafe Forms
+============
+obj.XMLHttpRequest
+obj[field]
+obj[field]++
+obj[field]--
+++obj[field]
+--obj[field]
+
+lookup is defined as:
+function(obj, field)  { 
+  if (field === "XMLHttpRequest") { 
+    return undefined; 
+  } 
+  else if (typeof field === "string") { 
+    return obj[field]; 
+  } 
+  else { 
+    return undefined; 
+  } }
+
+lookup is typable.
+
