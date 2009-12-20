@@ -103,3 +103,15 @@
   result += arry[0];
   result += arry.length;
 } :: "undefinedundefined0";
+
+{
+  //array constructor working in every way
+  var z = Array(1, 2, 3); 
+  result = "" + (z[0] + z[1] + z[2]);
+  z.blorka = Array;
+
+  var f = new z.blorka(4, 5);
+  result += ("" + (f[0] + f[1]));
+  var g = z.blorka(6, 7);
+  result += ("" + (g[0] + g[1]));
+} :: "6913";

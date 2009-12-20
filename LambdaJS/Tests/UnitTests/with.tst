@@ -49,3 +49,10 @@
   result = x + o.x;
   })();
 } :: 4;
+
+{
+  with (3) {
+    var innards = 50;
+  }
+  result = innards;
+} :: 50;

@@ -149,22 +149,14 @@ toObject e =
 -- Even though GetValue'd values are given to ToPrimitive in ECMA,
 -- here we need ERefs because we will apply functions.
 -- So make sure you give this ERef (EObject) if you get an object.
--- TODO: Take out the Catastrophes once we know they won't happen
--- just there for debugging for now
 toPrimitive_ :: String -> String -> Expr -> Expr
 toPrimitive_ first second e = 
-  --if it's an object ref, then convert it
-  --otherwise it is a primitive, so just return it.
-  --catastrophes are a bug with OUR semantics, so they should not be there
-  --in the final version - they're just a sanity check.
+  --if it's an object ref, then convert it with methods
+  --otherwise it is already primitive, so just return it.
   ELet [("$x", e)] $ 
     EIf (isLocation (EId "$x"))
-        (EIf (eNot (isObject (EDeref (EId "$x"))))
-             (EThrow (EString "Catastrophe - toPrim given a ref of a not-obj"))
-             cvt)
-        (EIf (isObject (EId "$x"))
-             (EThrow (EString "Catastrophe - toPrim given plain object"))
-             (EId "$x"))
+        cvt
+        (EId "$x")
   -- [[DefaultValue]] (8.6.2.6)
   where 
     --if valueOf is a function, try it. else try tostr.
@@ -197,12 +189,8 @@ toNumber :: Expr -> Expr
 toNumber e = 
   ELet [("$toNum", e)] $
     EIf (isLocation (EId "$toNum"))
-        (EIf (eNot (isObject (EDeref (EId "$toNum"))))
-             (EThrow (EString "Catastrophe - toNum given a ref of a not-obj"))
-             (primToNum $ toPrimitive_Number (EId "$toNum")))
-        (EIf (isObject (EId "$toNum"))
-             (EThrow (EString "Catastrophe - toNum given plain object"))
-             (primToNum (EId "$toNum")))
+        (primToNum $ toPrimitive_Number (EId "$toNum"))
+        (primToNum (EId "$toNum"))
 
 
 toBoolean = primToBool
@@ -215,12 +203,8 @@ toString :: Expr -> Expr
 toString e =
   ELet [("$toStr", e)] $
     EIf (isLocation (EId "$toStr"))
-        (EIf (eNot (isObject (EDeref (EId "$toStr"))))
-             (EThrow (EString "Catastrophe - toStr given a ref of a not-obj"))
-             (primToStr $ toPrimitive (EId "$toStr")))
-        (EIf (isObject (EId "$toStr"))
-             (EThrow (EString "Catastrophe - toStr given plain object"))
-             (primToStr (EId "$toStr")))
+        (primToStr $ toPrimitive (EId "$toStr"))
+        (primToStr (EId "$toStr"))
 
 
 abstractEquality :: Expr -> Expr -> Expr

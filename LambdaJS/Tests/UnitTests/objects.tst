@@ -18,3 +18,23 @@
  result += ""+bo.waffle;
 } :: "numberundefined";
 
+{
+ function z() {}
+ result = "" + z.prototype.toString();
+} :: "[object Object]";
+
+//instanceof should go up the prototype chain
+{
+ function C() {};
+ C.prototype = new String();
+ var x = new C();
+ result = ("" + (x instanceof Object)) + (x instanceof String);
+} :: "truetrue";
+
+//old created objects maintain the old prototype
+{
+  function C() {}
+  var x = new C();
+  C.prototype = new String();
+ result = ("" + (x instanceof Object)) + (x instanceof String);
+} :: "truefalse";

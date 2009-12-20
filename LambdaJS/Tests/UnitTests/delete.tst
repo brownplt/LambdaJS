@@ -16,7 +16,3 @@
   result += (obj.nothere);
 } :: "40trueundefinedtrueundefined";
 
-{
-  var z = 50;
-  y = delete z;
-} :: undefined;
