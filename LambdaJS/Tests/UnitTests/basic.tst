@@ -72,4 +72,36 @@
   var q = (false && z) + "";
   result = z.x;
 } :: undefined;
+//order of operations for listexprs
+{
+  result = "";
+  (result += "1", result += "2", result += "3");
+} :: "123";
+//complex lvalues work 
+{
+  result = "";
+  var x = {y: 10};
+  (result += "1", result += "2", result += "3", x).y = 13;
+  result += "|" + x.y;
+} :: "123|13";
+{
+  result = "";
+  var x = {y: 10};
+  (result += "1", result += "2", result += "3", x)['y'] = 13;
+  result += "|" + x['y'];
+} :: "123|13";
+//lvalues are not evaluated twice with complex assign exprs
+{
+  var x = {y: 10};
+  var y = 5;
+  (y++, x).y += 5;
+  result = "" + y + "|" + x.y;
+} :: "6|15";
+{
+  var x = {y: 10};
+  var y = 5;
+  (y++, x)['y'] += 5;
+  result = "" + y + "|" + x['y'];
+} :: "6|15";
+
 

@@ -589,8 +589,10 @@ expr env e = case e of
                              (expr env e2) (expr env e3)
   AssignExpr _ OpAssign lv e -> withLValue env lv $ \get setter ->
     setter (expr env e)
-  AssignExpr p op lv e -> 
-    expr env (AssignExpr p OpAssign lv (InfixExpr p iOp lvAsR e))
+  --assuming that 'get' has no side effects, which withLValue should 
+  --guarantee
+  AssignExpr p op lv e -> withLValue env lv $ \get setter ->
+    setter (infixOp iOp get (expr env e))
    where
     iOp = case op of
       OpAssignAdd -> OpAdd
@@ -605,10 +607,6 @@ expr env e = case e of
       OpAssignBXor -> OpBXor
       OpAssignBOr -> OpBOr
       OpAssign -> error "Haskell has gone haywire."
-    lvAsR = case lv of
-      LVar p x -> VarRef p (Id p x)
-      LDot p e1 field -> DotRef p e1 (Id p field)
-      LBracket p e1 e2 -> BracketRef p e1 e2
   ParenExpr _ e1 -> expr env e1
   ListExpr _ [] -> error "Desugar.hs: expr got empty ListExpr"
   ListExpr _ [e'] -> expr env e'
