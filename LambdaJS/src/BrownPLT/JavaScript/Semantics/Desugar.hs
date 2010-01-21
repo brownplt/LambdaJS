@@ -719,6 +719,7 @@ caseClauses _ _ env (CaseDefault a ss) innerExpr =
 stmt :: Env -> Statement SourcePos -> ExprPos
 stmt env s = case s of
   BlockStmt a [] -> EUndefined a
+  BlockStmt _ [s] -> stmt env s
   BlockStmt a (s:ss) -> ESeq a (stmt env s) (stmt env (BlockStmt a ss))
   EmptyStmt a -> EUndefined a
   ExprStmt _ e -> expr env e
