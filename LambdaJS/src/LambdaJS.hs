@@ -36,10 +36,10 @@ testCase = do
   reservedOp "::"
   expectedExpr <- parseExpression
   reservedOp ";"
-  let src = renderExpr (EString $ show srcLoc)
+  let src = renderExpr (EString nopos $ show srcLoc)
   let lhs = desugarStmtsWithResult [testStmt] ecma262Env 
-               (getValue (EGetField (EDeref $ EId "$global") 
-                                    (EString "result")))
+               (getValue (EGetField nopos (EDeref nopos $ EId nopos "$global") 
+                                    (EString nopos "result")))
   let rhs = getValue $ desugarExpr expectedExpr ecma262Env
   return $ parens (src <+> renderExpr lhs <+> renderExpr rhs)
 

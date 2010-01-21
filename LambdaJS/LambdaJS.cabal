@@ -27,7 +27,7 @@ Library
   ghc-options:
     -fwarn-incomplete-patterns
   Extensions:     
-    Generics DeriveDataTypeable Rank2Types
+    Generics DeriveDataTypeable Rank2Types FlexibleInstances
   Exposed-Modules:
     BrownPLT.JavaScript.Semantics.Desugar
     BrownPLT.JavaScript.Semantics.ECMAEnvironment
@@ -57,4 +57,5 @@ Executable lambdaJS
   ghc-options:
     -fwarn-incomplete-patterns
   Extensions:     
-    Generics DeriveDataTypeable Rank2Types
+    Generics DeriveDataTypeable Rank2Types FlexibleInstances
+

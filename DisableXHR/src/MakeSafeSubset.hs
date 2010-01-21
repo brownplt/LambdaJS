@@ -3,6 +3,7 @@ module MakeSafeSubset
   , safeStatements
   , globalEnv
   , parseExpr
+  , parseStmt
   , check
   ) where
 
@@ -41,12 +42,12 @@ globalEnv =
 
 
 
-check :: (Expr -> Either String typ) -> [Ident] -> String
+check :: (ExprPos -> Either String typ) -> [Ident] -> String
       -> Either String String
 check typeCheck freeIds src = 
   let expr = desugarExpr (parseExpr src) 
-             (\body -> ELet (map (\x -> (x, EUndefined)) globalEnv) $ 
-                       ELet (map (\x -> (x, EUndefined)) freeIds) $
+             (\body -> ELet nopos (map (\x -> (x, EUndefined nopos)) globalEnv) $ 
+                       ELet nopos (map (\x -> (x, EUndefined nopos)) freeIds) $
                          body)
     in case typeCheck expr of
          Right _ -> Right src
@@ -54,8 +55,8 @@ check typeCheck freeIds src =
 
 checkStmt typeCheck freeIds src = 
   let expr = desugarStmt (parseStmt src) 
-             (\body -> ELet (map (\x -> (x, EUndefined)) globalEnv) $ 
-                       ELet (map (\x -> (x, EUndefined)) freeIds) $
+             (\body -> ELet nopos (map (\x -> (x, EUndefined nopos)) globalEnv) $ 
+                       ELet nopos (map (\x -> (x, EUndefined nopos)) freeIds) $
                          body)
     in case typeCheck expr of
          Right _ -> Right src
@@ -65,7 +66,7 @@ checkStmt typeCheck freeIds src =
 removeIdents (xs, ys) = (map snd xs, map snd ys)
       
 
-safeExpressions :: (Expr -> Either String typ)
+safeExpressions :: (ExprPos -> Either String typ)
                -> ([String], [String])
 safeExpressions tc =  removeIdents (partition f allExprs)
   where f (xs, e) = case check tc xs e of

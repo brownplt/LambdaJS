@@ -1,4 +1,4 @@
-module Main where
+module AdsafeBlacklist where
 
 import qualified Data.Map as M
 import Data.List
@@ -36,7 +36,7 @@ instance Monad (Either String) where
 typeCheck :: Env -> ExprPos -> Either String T
 typeCheck env e = case e of
    ENumber _ _ -> return TSafe
-   EString _ "constructor" -> return JS
+   EString _ "XMLHttpRequest" -> return JS
    EString _ _ -> return TSafe
    EUndefined _ -> return TSafe
    EBool _ _ -> return TSafe
@@ -148,19 +148,33 @@ safeSubset = (safeExprs ++ safeStmts, unsafeExprs ++ unsafeStmts)
         (safeStmts, unsafeStmts) = safeStatements isTypeable
 
 safeLookup = 
-  "function(obj, field)  { \n\
-  \  if (field === \"XMLHttpRequest\") { \n\
-  \    return undefined; \n\
+  "function(object, name)  { \n\
+  \       var banned = { {\n\
+  \          'arguments'     : true, \n\
+  \          callee          : true,\n\
+  \          caller          : true,\n\
+  \          constructor     : true,\n\
+  \          'eval'          : true,\n\
+  \          prototype       : true,\n\
+  \          unwatch         : true,\n\
+  \          valueOf         : true,\n\
+  \          watch           : true \n\
+  \      };\n\
+  \ var reject = \n\
+  \  function(object, name) { \n\
+  \      return typeof object !== 'object' || banned[name] || \n\
+  \              ((typeof name !== 'number' || name < 0) && \n\
+  \              (typeof name !== 'string' || name.charAt(0) === '_' || \n\
+  \              name.charAt(0) === '-')); \n\
   \  } \n\
-  \  else if (typeof field === \"string\") { \n\
-  \    return obj[field]; \n\
-  \  } \n\
-  \  else { \n\
-  \    return undefined; \n\
-  \  } }"
+  \          if (arguments.length === 2 && !reject(object, name)) { \n\
+  \              return object[name]; \n\
+  \          } \n\
+  \          return undefined; \n\
+  \ }"
 
 
-main = do
+run = do
   let (safe, unsafe) = safeSubset
   putStrLn "Safe Forms"
   putStrLn "=========="

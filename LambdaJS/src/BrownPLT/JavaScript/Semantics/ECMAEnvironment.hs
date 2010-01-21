@@ -9,106 +9,106 @@ import BrownPLT.JavaScript.Parser (parseExpression)
 import qualified Data.Map as M
 
 
-object :: [(Ident, Expr)] -> Expr
-object props = EObject $ map (\(x, e) -> (x, e)) props
+object :: [(Ident, ExprPos)] -> ExprPos
+object props = EObject nopos $ map (\(x, e) -> (x, e)) props
 
 
 -- |helper to have already bound IDs
-lambda :: [Ident] -> Expr -> Expr
-lambda args body = ELambda ["this", "arguments"] body'
-  where body' = ELet (map arg (zip args [0..])) body
-        arg (x,n) = (x,EGetField (EDeref (EDeref (EId "arguments")))
-                                   (EString (show n)))
+lambda :: [Ident] -> ExprPos -> ExprPos
+lambda args body = ELambda nopos ["this", "arguments"] body'
+  where body' = ELet nopos (map arg (zip args [0..])) body
+        arg (x,n) = (x,EGetField nopos (EDeref nopos (EDeref nopos (EId nopos "arguments")))
+                                   (EString nopos (show n)))
 -- |Wraps the body of a lambda expression into a function object
-functionObject :: [Ident] -> Expr -> Expr
-functionObject args body = ERef $ object 
+functionObject :: [Ident] -> ExprPos -> ExprPos
+functionObject args body = ERef nopos $ object 
   [ ("$code", lambda args body)
-  , ("arguments", ENull)
-  , ("prototype", ERef $ object [("$proto", EId "$Object.prototype")])
+  , ("arguments", ENull nopos)
+  , ("prototype", ERef nopos $ object [("$proto", EId nopos "$Object.prototype")])
 --  , ("$class", EString "Function")
-  , ("$proto", EId "$Function.prototype")
-  , ("length", ENumber (fromIntegral $ length args))
-  , ("$strRep", EString "function fromafunctionboject(){}")
+  , ("$proto", EId nopos "$Function.prototype")
+  , ("length", ENumber nopos (fromIntegral $ length args))
+  , ("$strRep", EString nopos "function fromafunctionboject(){}")
   ]
 
 
 --evaluates the 1st expr if the function was called as a constructor,
 --and the 2nd if it was called as a function
-splitConstr :: Expr -> Expr -> Expr
+splitConstr :: ExprPos -> ExprPos -> ExprPos
 splitConstr eConstr eFunc = 
-  EIf (eNot (isUndefined $ getFieldT (EString "$constructing")))
+  EIf nopos (eNot (isUndefined $ getFieldT (EString nopos "$constructing")))
       eConstr
       eFunc
       
 
 
-asVariables :: [(Ident, Expr)] -> [(Ident, Expr)]
-asVariables binds = map (\(x, e) -> (x, ERef e)) binds
+asVariables :: [(Ident, ExprPos)] -> [(Ident, ExprPos)]
+asVariables binds = map (\(x, e) -> (x, ERef nopos e)) binds
 
 
 -- |Section 15.1
-globalValuesAndFunctions :: [(Ident, Expr)] 
+globalValuesAndFunctions :: [(Ident, ExprPos)] 
 globalValuesAndFunctions = 
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "global")
-  , ("NaN", ENumber (0.0/0.0))
-  , ("Infinity", ENumber (1.0/0.0))
-  , ("undefined", EUndefined)
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "global")
+  , ("NaN", ENumber nopos (0.0/0.0))
+  , ("Infinity", ENumber nopos (1.0/0.0))
+  , ("undefined", EUndefined nopos)
   -- TODO: parseInt and parseFloat are oversimplified
   , ("parseInt", functionObject ["n"] $ 
-    EOp OPrimToNum [toString $ EId "n"])
+    EOp nopos OPrimToNum [toString $ EId nopos "n"])
   , ("parseFloat", functionObject ["n"] $ 
-    EOp OPrimToNum [toString $ EId "n"])
+    EOp nopos OPrimToNum [toString $ EId nopos "n"])
   , ("isNaN", functionObject ["n"] $ 
-       eStxEq (ENumber (0.0/0.0)) (toNumber (EId "n")))
+       eStxEq (ENumber nopos (0.0/0.0)) (toNumber (EId nopos "n")))
   , ("isFinite", functionObject ["x"] $
-     ELet [("n", toNumber (EId "x"))] $
-       EIf (eStxEq (EId "n") (ENumber (0.0/0.0))) (EBool False) $
-       EIf (eStxEq (EId "n") (ENumber (1.0/0.0))) (EBool False) $
-       EIf (eStxEq (EId "n") (ENumber (-1.0/0.0))) (EBool False) $
-       (EBool True))
+     ELet nopos [("n", toNumber (EId nopos "x"))] $
+       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (0.0/0.0))) (EBool nopos False) $
+       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (1.0/0.0))) (EBool nopos False) $
+       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (-1.0/0.0))) (EBool nopos False) $
+       (EBool nopos True))
   -- TODO: URI functions don't transform URLs correctly.  But, the type
   -- conversion is in place.
   , ("decodeURI", functionObject ["encodedURI"] $
-     toString $ EId "decodeURI")
+     toString $ EId nopos "decodeURI")
   , ("decodeURIComponent", functionObject ["encodedURIComponent"] $
-      toString $ EId "encodedURIComponent")
+      toString $ EId nopos "encodedURIComponent")
   , ("encodeURI", functionObject ["uri"] $
-      toString $ EId "uri")
+      toString $ EId nopos "uri")
   , ("encodeURIComponent", functionObject ["uriComponent"] $
-      toString $ EId "uriComponent")
-  , ("eval", functionObject [] EEval)
+      toString $ EId nopos "uriComponent")
+  , ("eval", functionObject [] (EEval nopos))
   --these are refs of refs, so we must deref:
-  , ("Object", EDeref $ EId "Object")
-  , ("Function", EDeref $ EId "Function")
-  , ("Array", EDeref $ EId "Array")
-  , ("RegExp", EDeref $ EId "RegExp")
-  , ("String", EDeref $ EId "String")
-  , ("Date", EDeref $ EId "Date")
-  , ("Number", EDeref $ EId "Number")
-  , ("Boolean", EDeref $ EId "Boolean")
+  , ("Object", EDeref nopos $ EId nopos "Object")
+  , ("Function", EDeref nopos $ EId nopos "Function")
+  , ("Array", EDeref nopos $ EId nopos "Array")
+  , ("RegExp", EDeref nopos $ EId nopos "RegExp")
+  , ("String", EDeref nopos $ EId nopos "String")
+  , ("Date", EDeref nopos $ EId nopos "Date")
+  , ("Number", EDeref nopos $ EId nopos "Number")
+  , ("Boolean", EDeref nopos $ EId nopos "Boolean")
   
-  , ("Error", EDeref $ EId "Error")
-  , ("ConversionError", EDeref $ EId "ConversionError")
-  , ("EvalError", EDeref $ EId "EvalError")
-  , ("RangeError", EDeref $ EId "RangeError")
-  , ("ReferenceError", EDeref $ EId "ReferenceError")
-  , ("SyntaxError", EDeref $ EId "SyntaxError")
-  , ("TypeError", EDeref $ EId "TypeError")
-  , ("URIError", EDeref $ EId "URIError")
+  , ("Error", EDeref nopos $ EId nopos "Error")
+  , ("ConversionError", EDeref nopos $ EId nopos "ConversionError")
+  , ("EvalError", EDeref nopos $ EId nopos "EvalError")
+  , ("RangeError", EDeref nopos $ EId nopos "RangeError")
+  , ("ReferenceError", EDeref nopos $ EId nopos "ReferenceError")
+  , ("SyntaxError", EDeref nopos $ EId nopos "SyntaxError")
+  , ("TypeError", EDeref nopos $ EId nopos "TypeError")
+  , ("URIError", EDeref nopos $ EId nopos "URIError")
 
-  , ("print", functionObject ["V"] $ EOp OPrint [toString (EId "V")])
-  , ("Math", ERef $ object $
-    [ ("$class", EString "Math")
-    , ("$proto", EId "$Object.prototype") 
-    , ("E", ENumber (exp 1))
-    , ("LN10", ENumber (log 10))
-    , ("LN2", ENumber (log 2))
-    , ("LOG2E", ENumber (log (exp 1) / log 2))
-    , ("LOG10E", ENumber (log (exp 1) / log 10))
-    , ("PI", ENumber pi)
-    , ("SQRT1_2", ENumber (sqrt (1.0/2.0)))
-    , ("SQRT2", ENumber (sqrt 2))
+  , ("print", functionObject ["V"] $ EOp nopos OPrint [toString (EId nopos "V")])
+  , ("Math", ERef nopos $ object $
+    [ ("$class", EString nopos "Math")
+    , ("$proto", EId nopos "$Object.prototype") 
+    , ("E", ENumber nopos (exp 1))
+    , ("LN10", ENumber nopos (log 10))
+    , ("LN2", ENumber nopos (log 2))
+    , ("LOG2E", ENumber nopos (log (exp 1) / log 2))
+    , ("LOG10E", ENumber nopos (log (exp 1) / log 10))
+    , ("PI", ENumber nopos pi)
+    , ("SQRT1_2", ENumber nopos (sqrt (1.0/2.0)))
+    , ("SQRT2", ENumber nopos (sqrt 2))
 
     , ("exp", mathFunc OMathExp)
     , ("log", mathFunc OMathLog)
@@ -119,44 +119,44 @@ globalValuesAndFunctions =
     ])  
   ]
  where
-  mathFunc op = functionObject ["x"] (EOp op [toNumber (EId "x")])
-  mathFunc2 op = functionObject ["x","y"] (EOp op [toNumber (EId "x"),
-                                                   toNumber (EId "y")])
+  mathFunc op = functionObject ["x"] (EOp nopos op [toNumber (EId nopos "x")])
+  mathFunc2 op = functionObject ["x","y"] (EOp nopos op [toNumber (EId nopos "x"),
+                                                   toNumber (EId nopos "y")])
 
 --update the object with everything in the given list
 --used to close recursions
-updateObject :: Expr -> [(Ident, Expr)] -> Expr -> Expr
+updateObject :: ExprPos -> [(Ident, ExprPos)] -> ExprPos -> ExprPos
 updateObject objE [] rest = rest
 updateObject objE ((name,e):xs) rest = 
-  ESeq (setField objE (EString name) e)
-       (updateObject objE xs rest)
+  ESeq nopos (setField objE (EString nopos name) e)
+           (updateObject objE xs rest)
 
 --helper to ensure the corrakt type of 'this'
-checkThis expected = EIf (eNot (eStxEq (getFieldT (EString "$class")) 
-                                       (EString expected)))
-                (EThrow $ newError "TypeError" $ 
+checkThis expected = EIf nopos (eNot (eStxEq (getFieldT (EString nopos "$class")) 
+                                       (EString nopos expected)))
+                (EThrow nopos $ newError "TypeError" $ 
                   "expected " ++ expected ++ " obj, got smth else")
 
 -- |Sections 15.2.3 and 15.2.4
 -- TODO : isPrototypeOf and propertyIsEnumerable
 objectPrototypeValues =
-  [ ("$proto", ENull)
-  , ("$class", EString "Object")
-  , ("constructor", EUndefined) -- Set to Object later
+  [ ("$proto", ENull nopos)
+  , ("$class", EString nopos "Object")
+  , ("constructor", EUndefined nopos) -- Set to Object later
   , ("toString", functionObject [] $
-       EOp OStrPlus [EString "[object ",
-                     EOp OStrPlus [EGetField (EDeref $ EId "this") 
-                                             (EString "$class"),
-                                   EString "]"]])
+       EOp nopos OStrPlus [EString nopos "[object ",
+                     EOp nopos OStrPlus [EGetField nopos (EDeref nopos $ EId nopos "this") 
+                                             (EString nopos "$class"),
+                                   EString nopos "]"]])
   , ("toLocaleString", functionObject [] $
-       EOp OStrPlus [EString "[object ",
-                     EOp OStrPlus [EGetField (EDeref $ EId "this") 
-                                             (EString "$class"),
-                                   EString "]"]])
-  , ("valueOf", functionObject [] $ EId "this")
+       EOp nopos OStrPlus [EString nopos "[object ",
+                     EOp nopos OStrPlus [EGetField nopos (EDeref nopos $ EId nopos "this") 
+                                             (EString nopos "$class"),
+                                   EString nopos "]"]])
+  , ("valueOf", functionObject [] $ EId nopos "this")
   , ("hasOwnProperty", functionObject ["V"] $
-       EOp OHasOwnProp [EDeref $ EId "this",
-                        toString (EId "V")])
+       EOp nopos OHasOwnProp [EDeref nopos $ EId nopos "this",
+                        toString (EId nopos "V")])
   ]
 
 nativeFunctionStrRep name = "function "++name++"() {\n    [native code]\n}"
@@ -237,457 +237,457 @@ arrayJoinLocale = parseSrc "function () {      \n\
 
 
 -- |Section 15.4.4
-arrayPrototype :: Expr
+arrayPrototype :: ExprPos
 arrayPrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Object")
-  , ("length", ENumber 0)
-  , ("constructor", EUndefined) -- Set to Array later
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Object")
+  , ("length", ENumber nopos 0)
+  , ("constructor", EUndefined nopos) -- Set to Array later
   , ("toString", functionObject [] $ checkThis "Array" $ 
-      applyObj (EGetField (EDeref $ EId "this") (EString "join")) 
-               (EId "this") [])
+      applyObj (EGetField nopos (EDeref nopos $ EId nopos "this") (EString nopos "join")) 
+               (EId nopos "this") [])
   , ("toLocaleString", desugarExprSetenv arrayJoinLocale 
                          (M.singleton "this" True))
-  , ("concat", (EString "TODO: Array.prototype.concat"))
+  , ("concat", (EString nopos "TODO: Array.prototype.concat"))
   , ("join", desugarExprSetenv arrayJoin (M.singleton "this" True))
   , ("pop", functionObject [] $
-    (EIf (eStxEq (getFieldT (EString "length")) (ENumber 0))
-         EUndefined $
+    (EIf nopos (eStxEq (getFieldT (EString nopos "length")) (ENumber nopos 0))
+         (EUndefined nopos) $
          --set length to length-1, get the item there, delete it, and return
-         ELet [("$newlen", (EOp ONumPlus 
-           [primToNum (getFieldT (EString "length")), ENumber (-1)]))] $
-           ELet [("$result", getFieldT (primToStr (EId "$newlen")))] $
-             ESeq (setFieldT (EString "length") (EId "$newlen")) $
-               ESeq (ESetRef (EId "this")
-                      (EDeleteField (EDeref $ EId "this")
-                                    (primToStr $ EId "$newlen")))
-                    (EId "$result")))
+         ELet nopos [("$newlen", (EOp nopos ONumPlus 
+           [primToNum (getFieldT (EString nopos "length")), ENumber nopos (-1)]))] $
+           ELet nopos [("$result", getFieldT (primToStr (EId nopos "$newlen")))] $
+             ESeq nopos (setFieldT (EString nopos "length") (EId nopos "$newlen")) $
+               ESeq nopos (ESetRef nopos (EId nopos "this")
+                      (EDeleteField nopos (EDeref nopos $ EId nopos "this")
+                                    (primToStr $ EId nopos "$newlen")))
+                    (EId nopos "$result")))
   , ("push", functionObject [] $ --use a for loop:
-    ELet [("$i", ERef (ENumber 0))] $ ESeq ( 
-      eFor EUndefined --init, incr, test, body
-           (ESetRef (EId "$i") (EOp ONumPlus [EDeref (EId "$i"), ENumber 1]))
-           (EOp OLt [EDeref (EId "$i"),
-                     EGetField (EDeref (EDeref (EId "arguments"))) 
-                               (EString "length")])
-           (ESeq (setFieldT (primToStr (getFieldT (EString "length")) )
-                            (EGetField (EDeref (EDeref (EId "arguments")))
-                                       (primToStr (EDeref $ EId "$i"))))
-                 (setFieldT (EString "length")
-                            (EOp ONumPlus [getFieldT (EString "length"),
-                                          ENumber 1]))))
-           (getFieldT (EString "length"))) --return the new length
-  , ("reverse", (EString "TODO: Array.prototype.reverse"))
-  , ("shift", (EString "TODO: Array.prototype.shift"))
-  , ("slice", (EString "TODO: Array.prototype.slice"))
+    ELet nopos [("$i", ERef nopos (ENumber nopos 0))] $ ESeq nopos ( 
+      eFor (EUndefined nopos) --init, incr, test, body
+           (ESetRef nopos (EId nopos "$i") (EOp nopos ONumPlus [EDeref nopos (EId nopos "$i"), ENumber nopos 1]))
+           (EOp nopos OLt [EDeref nopos (EId nopos "$i"),
+                     EGetField nopos (EDeref nopos (EDeref nopos (EId nopos "arguments"))) 
+                               (EString nopos "length")])
+           (ESeq nopos (setFieldT (primToStr (getFieldT (EString nopos "length")) )
+                            (EGetField nopos (EDeref nopos (EDeref nopos (EId nopos "arguments")))
+                                       (primToStr (EDeref nopos $ EId nopos "$i"))))
+                 (setFieldT (EString nopos "length")
+                            (EOp nopos ONumPlus [getFieldT (EString nopos "length"),
+                                          ENumber nopos 1]))))
+           (getFieldT (EString nopos "length"))) --return the new length
+  , ("reverse", (EString nopos "TODO: Array.prototype.reverse"))
+  , ("shift", (EString nopos "TODO: Array.prototype.shift"))
+  , ("slice", (EString nopos "TODO: Array.prototype.slice"))
   , ("sort", desugarExprSetenv arraySort (M.singleton "this" True))
-  , ("splice", (EString "TODO: Array.prototype.splice"))
-  , ("unshift", (EString "TODO: Array.prototype.unshift"))
+  , ("splice", (EString nopos "TODO: Array.prototype.splice"))
+  , ("unshift", (EString nopos "TODO: Array.prototype.unshift"))
   ]
   
 -- |Section 15.4.4
-regExpPrototype :: Expr
+regExpPrototype :: ExprPos
 regExpPrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Object")
-  , ("length", ENumber 0)
-  , ("constructor", EUndefined) -- Set to RegExp later
-  --, ("toString", (EString "TODO: regExp.prototype.toString"))
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Object")
+  , ("length", ENumber nopos 0)
+  , ("constructor", EUndefined nopos) -- Set to RegExp later
+  --, ("toString", (EString nopos "TODO: regExp.prototype.toString"))
   --TODO: make this return an array with 'index' and 'input'
   , ("exec", functionObject ["$$string"] $ checkThis "RegExp" $ 
-    EIf (eOr (getFieldT (EString "global"))
-             (getFieldT (EString "ignoreCase")))
-      (EThrow (EString "regexp not fully impl yet")) $
-      ELet1 (toString $ EId "$$string") (\str -> 
-        ELet1 (EOp ORegExpMatch [EId str, getFieldT (EString "$regexpPattern")])
-          (\matchRes -> EIf (isUndefined (EId matchRes)) ENull $
-            eNewDirect (EDeref $ EId "Array") (ERef $ ERef $ EId matchRes))))
-  , ("test", EString "TODO: RegExp.prototype.test")
+    EIf nopos (eOr (getFieldT (EString nopos "global"))
+             (getFieldT (EString nopos "ignoreCase")))
+      (EThrow nopos (EString nopos "regexp not fully impl yet")) $
+      ELet1 nopos (toString $ EId nopos "$$string") (\str -> 
+        ELet1 nopos (EOp nopos ORegExpMatch [EId nopos str, getFieldT (EString nopos "$regexpPattern")])
+          (\matchRes -> EIf nopos (isUndefined (EId nopos matchRes)) (ENull nopos) $
+            eNewDirect (EDeref nopos $ EId nopos "Array") (ERef nopos $ ERef nopos $ EId nopos matchRes))))
+  , ("test", EString nopos "TODO: RegExp.prototype.test")
   ]
 
 
 -- |Sections 15.2.1 and 15.2.2
-jsObject :: Expr
-jsObject = ERef $ object
-  [ ("$proto", EId "$Function.prototype") -- Yes, this is correct.
-  , ("prototype", EId "$Object.prototype")
-  , ("length", ENumber 1)
+jsObject :: ExprPos
+jsObject = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype") -- Yes, this is correct.
+  , ("prototype", EId nopos "$Object.prototype")
+  , ("length", ENumber nopos 1)
   , ("$code", lambda ["value"] $ 
-       EIf (EIf (EOp OStrictEq [EId "value", EUndefined])
-                (EBool True)
-                (EOp OStrictEq [EId "value", ENull]))
-           (ERef $ object [ ("$class", EString "Object")
-                          , ("$proto", EId "$Object.prototype")
+       EIf nopos (EIf nopos (EOp nopos OStrictEq [EId nopos "value", (EUndefined nopos)])
+                (EBool nopos True)
+                (EOp nopos OStrictEq [EId nopos "value", ENull nopos]))
+           (ERef nopos $ object [ ("$class", EString nopos "Object")
+                          , ("$proto", EId nopos "$Object.prototype")
                           ])
-           (toObject (EId "value")))
+           (toObject (EId nopos "value")))
   ]
 
 
 --helpers for constructors:
 setField lhse fnamee fe =
-  ESetRef lhse (EUpdateField (EDeref lhse) fnamee fe)
-setFieldT = setField (EId "this")
-setFieldTS a b = ESeq $ setField (EId "this") a b
-getField lhse fnamee = EGetField (EDeref lhse) fnamee
-getFieldT = getField (EId "this")
+  ESetRef nopos lhse (EUpdateField nopos (EDeref nopos lhse) fnamee fe)
+setFieldT = setField (EId nopos "this")
+setFieldTS a b = ESeq nopos $ setField (EId nopos "this") a b
+getField lhse fnamee = EGetField nopos (EDeref nopos lhse) fnamee
+getFieldT = getField (EId nopos "this")
 
 -- |Section 15.4.2
 -- TODO: make it work as a non-constr too
-jsArray :: Expr
-jsArray = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("length", ENumber 1)
-  , ("prototype", EId "$Array.prototype")
-  , ("$strRep", EString $ nativeFunctionStrRep "Array")
+jsArray :: ExprPos
+jsArray = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("length", ENumber nopos 1)
+  , ("prototype", EId nopos "$Array.prototype")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Array")
   --15.4.2.1
   , ("$code", constr)
   ]
  where
   constr = lambda ["$arg0"] $ 
-    ELet [("$numArgs", EGetField (EDeref $ EDeref $ EId "arguments")
-                                 (EString "length"))] $
+    ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
+                                 (EString nopos "length"))] $
       splitConstr asConstr asFunc
-  asFunc = eNewDirect (getField (EId "$global") (EString "Array")) 
-             (EId "arguments")
+  asFunc = eNewDirect (getField (EId nopos "$global") (EString nopos "Array")) 
+             (EId nopos "arguments")
   asConstr = 
       --if there is 1 arg and it is a number, we do something else:
-      EIf (eAnd (eStxEq (EId "$numArgs") (ENumber 1))
-                (isNumber (EId "$arg0")))
-          (EIf (eStxEq (EOp OToUInt32 [(EId "$arg0")])
-                       (EId "$arg0"))
-               (objsetup (EId "$arg0") EUndefined)
-               (EThrow $ newError "RangeError" "invalid len to new Array()"))
+      EIf nopos (eAnd (eStxEq (EId nopos "$numArgs") (ENumber nopos 1))
+                (isNumber (EId nopos "$arg0")))
+          (EIf nopos (eStxEq (EOp nopos OToUInt32 [(EId nopos "$arg0")])
+                       (EId nopos "$arg0"))
+               (objsetup (EId nopos "$arg0") (EUndefined nopos))
+               (EThrow nopos $ newError "RangeError" "invalid len to new Array()"))
           --otherwise we do this:
-          (objsetup (EId "$numArgs") objconstr)
+          (objsetup (EId nopos "$numArgs") objconstr)
   objsetup lengthe r = 
-    ESeq (setFieldT (EString "$class") (EString "Array"))
-         (ESeq (setFieldT (EString "$proto") (EId "$Array.prototype"))
-               (ESeq (setFieldT (EString "length") lengthe)
+    ESeq nopos (setFieldT (EString nopos "$class") (EString nopos "Array"))
+         (ESeq nopos (setFieldT (EString nopos "$proto") (EId nopos "$Array.prototype"))
+               (ESeq nopos (setFieldT (EString nopos "length") lengthe)
                      r))
   objconstr = 
-    ELet [("$i", ERef $ ENumber 0)] $
-      EWhile (EOp OLt [EDeref (EId "$i"), EId "$numArgs"]) $
-        ESeq (setFieldT (primToStr (EDeref (EId "$i")))
-                        (EGetField (EDeref $ EDeref $ EId"arguments")
-                                   (primToStr (EDeref (EId "$i")))))
-             (ESetRef (EId "$i")
-                      (EOp ONumPlus [EDeref (EId "$i"), ENumber 1]))
+    ELet nopos [("$i", ERef nopos $ ENumber nopos 0)] $
+      EWhile nopos (EOp nopos OLt [EDeref nopos (EId nopos "$i"), EId nopos "$numArgs"]) $
+        ESeq nopos (setFieldT (primToStr (EDeref nopos (EId nopos "$i")))
+                        (EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos"arguments")
+                                   (primToStr (EDeref nopos (EId nopos "$i")))))
+             (ESetRef nopos (EId nopos "$i")
+                      (EOp nopos ONumPlus [EDeref nopos (EId nopos "$i"), ENumber nopos 1]))
 
 
 --the pattern used to construct a regexp is in $regexpPattern,
 --and the flags used for construction are in $regexpFlags. 
 --these are used by Scheme's perl regexp thing 
-jsRegExp = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("prototype", EId "$RegExp.prototype")
-  , ("length", ENumber 2)
+jsRegExp = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("prototype", EId nopos "$RegExp.prototype")
+  , ("length", ENumber nopos 2)
   , ("$code", constr) ]
  where
   constr = lambda ["$pattern", "$flags"] $ 
-      ELet [("$P", pattern), ("$F", flags)] $
+      ELet nopos [("$P", pattern), ("$F", flags)] $
         checkFlags $
           setG $ setIC $ setML $
           setMatch $ setFlags $
           setSource $ setLI $
-            ESeq (setFieldT (EString "$proto") (EId "$RegExp.prototype"))
-                  (ESeq (setFieldT (EString "$class") (EString "RegExp"))
-                       EUndefined)
+            ESeq nopos (setFieldT (EString nopos "$proto") (EId nopos "$RegExp.prototype"))
+                  (ESeq nopos (setFieldT (EString nopos "$class") (EString nopos "RegExp"))
+                       (EUndefined nopos))
   pattern = 
-    EIf (isRefComb isObject (EId "$pattern"))
-        (EIf (eNot (isUndefined (EId "$flags")))
-             (EThrow $ newError "TypeError" "given regexp and flags in constr")
-             (EGetField (EDeref (EId "$pattern"))
-                        (EString "$regexpPattern")))
-        (EIf (isUndefined (EId "$pattern"))
-             (EString "")
-             (toString (EId "$pattern")))
+    EIf nopos (isRefComb isObject (EId nopos "$pattern"))
+        (EIf nopos (eNot (isUndefined (EId nopos "$flags")))
+             (EThrow nopos $ newError "TypeError" "given regexp and flags in constr")
+             (EGetField nopos (EDeref nopos (EId nopos "$pattern"))
+                        (EString nopos "$regexpPattern")))
+        (EIf nopos (isUndefined (EId nopos "$pattern"))
+             (EString nopos "")
+             (toString (EId nopos "$pattern")))
   --don't have to re-check the $flags being undefined here:
   flags = 
-    EIf (isRefComb isObject (EId "$pattern"))
-        (EGetField (EDeref (EId "$pattern"))
-                   (EString "$regexpFlags"))
-        (EIf (isUndefined (EId "$flags"))
-             (EString "")
-             (toString (EId "$flags")))
+    EIf nopos (isRefComb isObject (EId nopos "$pattern"))
+        (EGetField nopos (EDeref nopos (EId nopos "$pattern"))
+                   (EString nopos "$regexpFlags"))
+        (EIf nopos (isUndefined (EId nopos "$flags"))
+             (EString nopos "")
+             (toString (EId nopos "$flags")))
   checkFlags = id --TODO: throw type errors if wrong flags given (see 15.10.4.1)
   setG = fhelp "global" "g"
   setIC = fhelp "ignoreCase" "i"
   setML = fhelp "multiline" "m"
   fhelp fieldname flagname = 
-    ESeq (setFieldT (EString fieldname)
-                    (EOp OStrContains [EId "$F", EString flagname]))
-  setMatch = ESeq (setFieldT (EString "$regexpPattern") (EId "$P"))
-  setFlags = ESeq (setFieldT (EString "$regexpFlags") (EId "$F"))
-  setSource = ESeq (setFieldT (EString "source") (EId "$P"))
-  setLI = ESeq (setFieldT (EString "lastIndex") (ENumber 0))
+    ESeq nopos (setFieldT (EString nopos fieldname)
+                    (EOp nopos OStrContains [EId nopos "$F", EString nopos flagname]))
+  setMatch = ESeq nopos (setFieldT (EString nopos "$regexpPattern") (EId nopos "$P"))
+  setFlags = ESeq nopos (setFieldT (EString nopos "$regexpFlags") (EId nopos "$F"))
+  setSource = ESeq nopos (setFieldT (EString nopos "source") (EId nopos "$P"))
+  setLI = ESeq nopos (setFieldT (EString nopos "lastIndex") (ENumber nopos 0))
                
  
 
 -- |Sections 15.3.2 and 15.3.2
-jsFunction = ERef $ object
+jsFunction = ERef nopos $ object
   --special-case func constr to work as empty constr, as that is used
   --in some test cases and has no reason to evalbomb
   [ ("$code", lambda [] $
-    ELet [("$numArgs", EGetField (EDeref $ EDeref $ EId "arguments")
-                                 (EString "length"))] $
-      EIf (eStxEq (EId "$numArgs") (ENumber 0))
-          (setFieldTS (EString "$proto") (EId "$Function.prototype") $
-           setFieldTS (EString "$class") (EString "Function") $
-           setFieldTS (EString "length") (ENumber 0) $
-           EUndefined)
-          EEval)
+    ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
+                                 (EString nopos "length"))] $
+      EIf nopos (eStxEq (EId nopos "$numArgs") (ENumber nopos 0))
+          (setFieldTS (EString nopos "$proto") (EId nopos "$Function.prototype") $
+           setFieldTS (EString nopos "$class") (EString nopos "Function") $
+           setFieldTS (EString nopos "length") (ENumber nopos 0) $
+           (EUndefined nopos))
+          (EEval nopos))
    -- Both .prototype and .[[Prototype]] reference the same object.
-  , ("$proto", EId "$Function.prototype")
-  , ("$class", EString "Function") --TODO: not sure if this should be here
-  , ("$strRep", EString $ nativeFunctionStrRep "Function")
-  , ("prototype", EId "$Function.prototype")
-  , ("length", ENumber 1)
+  , ("$proto", EId nopos "$Function.prototype")
+  , ("$class", EString nopos "Function") --TODO: not sure if this should be here
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Function")
+  , ("prototype", EId nopos "$Function.prototype")
+  , ("length", ENumber nopos 1)
   ]
 
 
-jsBoolean = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("$class", EString "Function")
-  , ("$strRep", EString $ nativeFunctionStrRep "Boolean")
-  , ("prototype", EId "$Boolean.prototype")
-  , ("length", ENumber 1)
+jsBoolean = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Boolean")
+  , ("prototype", EId nopos "$Boolean.prototype")
+  , ("length", ENumber nopos 1)
   , ("$code", constr) ]
  where
   constr = lambda ["value"] $ 
-    setFieldTS (EString "$proto") (EId "$Boolean.prototype") $
-    setFieldTS (EString "$class") (EString "Boolean") $
-    setFieldT  (EString "$value") (toBoolean (EId "value"))
+    setFieldTS (EString nopos "$proto") (EId nopos "$Boolean.prototype") $
+    setFieldTS (EString nopos "$class") (EString nopos "Boolean") $
+    setFieldT  (EString nopos "$value") (toBoolean (EId nopos "value"))
 
 
 --stringzzzz
 --internal value held in $value
-jsString = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("$class", EString "Function")
-  , ("$strRep", EString $ nativeFunctionStrRep "String")
-  , ("prototype", EId "$String.prototype")
-  , ("fromCharCode", EString "TODO: String fromCharCode")
-  , ("length", ENumber 1)
+jsString = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "String")
+  , ("prototype", EId nopos "$String.prototype")
+  , ("fromCharCode", EString nopos "TODO: String fromCharCode")
+  , ("length", ENumber nopos 1)
   , ("$code", lambda ["$value"] $ splitConstr constr func) ]
  where
   constr = 
-    setFieldTS (EString "$proto") (EId "$String.prototype") $
-    setFieldTS (EString "$class") (EString "String") $
-    setFieldTS (EString "$value")
-      (EIf (isUndefined (EId "$value")) (EString "") (toString (EId "$value")))$
-    setFieldT  (EString "length") (EOp OStrLen [getFieldT (EString "$value")])
+    setFieldTS (EString nopos "$proto") (EId nopos "$String.prototype") $
+    setFieldTS (EString nopos "$class") (EString nopos "String") $
+    setFieldTS (EString nopos "$value")
+      (EIf nopos (isUndefined (EId nopos "$value")) (EString nopos "") (toString (EId nopos "$value")))$
+    setFieldT  (EString nopos "length") (EOp nopos OStrLen [getFieldT (EString nopos "$value")])
   func = 
-    EIf (isUndefined $ EId "$value")
-        (EString "")
-        (toString (EId "$value"))
+    EIf nopos (isUndefined $ EId nopos "$value")
+        (EString nopos "")
+        (toString (EId nopos "$value"))
 
-jsDate :: Expr
-jsDate = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("$class", EString "Function")
-  , ("$strRep", EString $ nativeFunctionStrRep "Date")
-  , ("length", ENumber 7)
-  , ("prototype", EId "$Date.prototype")
+jsDate :: ExprPos
+jsDate = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Date")
+  , ("length", ENumber nopos 7)
+  , ("prototype", EId nopos "$Date.prototype")
   , ("$code", constr)
-  , ("parse", EString "TODO: Date.parse")
-  , ("UTC", EString "TODO: Date.UTC")
+  , ("parse", EString nopos "TODO: Date.parse")
+  , ("UTC", EString nopos "TODO: Date.UTC")
   ]
  where
   constr = lambda ["y", "m", "d", "h", "min", "s", "ms"] $ 
-    ELet [("$numArgs", EGetField (EDeref $ EDeref $ EId "arguments")
-                                 (EString "length"))] $
-      ESeq objsetup EUndefined  
+    ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
+                                 (EString nopos "length"))] $
+      ESeq nopos objsetup (EUndefined nopos)
   objsetup = 
-    ESeq (setFieldT (EString "$class") (EString "Date"))
-         (ESeq (setFieldT (EString "$proto") (EId "$Date.prototype"))
-               (setFieldT (EString "$value") (EString "TODO:Dateimpl")))
+    ESeq nopos (setFieldT (EString nopos "$class") (EString nopos "Date"))
+         (ESeq nopos (setFieldT (EString nopos "$proto") (EId nopos "$Date.prototype"))
+               (setFieldT (EString nopos "$value") (EString nopos "TODO:Dateimpl")))
 
 
-jsNumber :: Expr
-jsNumber = ERef $ object
-  [ ("$proto", EId "$Function.prototype")
-  , ("$class", EString "Function")
-  , ("$strRep", EString $ nativeFunctionStrRep "Number")
-  , ("length", ENumber 1)
-  , ("prototype", EId "$Number.prototype")
+jsNumber :: ExprPos
+jsNumber = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype")
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Number")
+  , ("length", ENumber nopos 1)
+  , ("prototype", EId nopos "$Number.prototype")
   , ("$code", constr)
-  , ("MAX_VALUE", ENumber (1.7976931348623157 * (10 ^ 308)))
-  , ("MIN_VALUE", ENumber (5 * 1.0 / (10 ^ 324)))
-  , ("NaN", ENumber (0.0/0.0))
-  , ("NEGATIVE_INFINITY", ENumber (- (1.0 / 0.0)))
-  , ("POSITIVE_INFINITY", ENumber (1.0 / 0.0))
-  , ("parse", EString "TODO: Date.parse")
-  , ("UTC", EString "TODO: Date.UTC")
+  , ("MAX_VALUE", ENumber nopos (1.7976931348623157 * (10 ^ 308)))
+  , ("MIN_VALUE", ENumber nopos (5 * 1.0 / (10 ^ 324)))
+  , ("NaN", ENumber nopos (0.0/0.0))
+  , ("NEGATIVE_INFINITY", ENumber nopos (- (1.0 / 0.0)))
+  , ("POSITIVE_INFINITY", ENumber nopos (1.0 / 0.0))
+  , ("parse", EString nopos "TODO: Date.parse")
+  , ("UTC", EString nopos "TODO: Date.UTC")
   ]
  where
   constr = lambda ["$value"] $ 
-    ELet [("$numArgs", EGetField (EDeref $ EDeref $ EId "arguments")
-                                 (EString "length"))] $
-      ESeq (EIf (eStxEq (EId "$numArgs") (ENumber 0))
-                (objsetup (ENumber 0.0))
-                (objsetup (toNumber $ EId "$value")))
-           EUndefined
+    ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
+                                 (EString nopos "length"))] $
+      ESeq nopos (EIf nopos (eStxEq (EId nopos "$numArgs") (ENumber nopos 0))
+                (objsetup (ENumber nopos 0.0))
+                (objsetup (toNumber $ EId nopos "$value")))
+           (EUndefined nopos)
   objsetup val = 
-    ESeq (setFieldT (EString "$class") (EString "Number"))
-         (ESeq (setFieldT (EString "$proto") (EId "$Number.prototype"))
-               (setFieldT (EString "$value") val))
+    ESeq nopos (setFieldT (EString nopos "$class") (EString nopos "Number"))
+         (ESeq nopos (setFieldT (EString nopos "$proto") (EId nopos "$Number.prototype"))
+               (setFieldT (EString nopos "$value") val))
 
 
 -- |Section 15.3.4
 -- TODO: call
-functionPrototypeValues :: [(Ident,Expr)]
+functionPrototypeValues :: [(Ident,ExprPos)]
 functionPrototypeValues = 
   [ -- In Safari 4.0, Function.prototype instanceof Object and not of Function
-    ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Function")
-  , ("$strRep", EString "function () {\n}")
-  , ("constructor", EUndefined) -- Set to Function later
-  , ("toString", functionObject [] $ getFieldT (EString "$strRep"))
-  , ("length", ENumber 0)
+    ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos "function () {\n}")
+  , ("constructor", EUndefined nopos) -- Set to Function later
+  , ("toString", functionObject [] $ getFieldT (EString nopos "$strRep"))
+  , ("length", ENumber nopos 0)
   , ("apply", functionObject ["thisArg", "argArray"] $ 
-    EIf (eNot (EOp OHasOwnProp [EDeref $ EId "this", EString "$code"]))
-        (EThrow $ newError "TypeError" "apply must have this as a function") $
-    ELet1 (EIf (eOr (isNull (EId "thisArg")) (isUndefined (EId "thisArg")))
-               (EId "$global") (EId "thisArg")) $ \thisArg ->
-    ELet1 (EIf (eOr (isNull (EId "argArray")) (isUndefined (EId "argArray")))
-               (eArgumentsObj [] (EId "this"))
-               (checkArray (EId "argArray") $ 
-                arrayToArgs(EId "argArray") )) $ \argArray ->
-      EApp (EGetField (EDeref $ EId "this") (EString "$code"))
-           [EId thisArg, ERef $ EId argArray])
+    EIf nopos (eNot (EOp nopos OHasOwnProp [EDeref nopos $ EId nopos "this", EString nopos "$code"]))
+        (EThrow nopos $ newError "TypeError" "apply must have this as a function") $
+    ELet1 nopos (EIf nopos (eOr (isNull (EId nopos "thisArg")) (isUndefined (EId nopos "thisArg")))
+               (EId nopos "$global") (EId nopos "thisArg")) $ \thisArg ->
+    ELet1 nopos (EIf nopos (eOr (isNull (EId nopos "argArray")) (isUndefined (EId nopos "argArray")))
+               (eArgumentsObj [] (EId nopos "this"))
+               (checkArray (EId nopos "argArray") $ 
+                arrayToArgs(EId nopos "argArray") )) $ \argArray ->
+      EApp nopos (EGetField nopos (EDeref nopos $ EId nopos "this") (EString nopos "$code"))
+           [EId nopos thisArg, ERef nopos $ EId nopos argArray])
   ]
  where
   checkArray ae = 
-    EIf (eNot (eAnd (isLocation ae) 
+    EIf nopos (eNot (eAnd (isLocation ae) 
                     (eOr (hasClass ae "Array")
-                         (eStxEq (getField ae (EString "$isArgs"))
-                                 (EBool True)))))
-        (EThrow $ newError "TypeError" "apply expects arguments or array")
+                         (eStxEq (getField ae (EString nopos "$isArgs"))
+                                 (EBool nopos True)))))
+        (EThrow nopos $ newError "TypeError" "apply expects arguments or array")
   arrayToArgs ae = 
     --loop through the initial args obj, ae, and copy its elements into
     --the new one, argsObj, which starts off as an empty args object
-    ELet2 (ERef (ENumber 0))(ERef$eArgumentsObj [] (EId "this")) $ \i argsObj ->
-    ESeq ( 
-      eFor EUndefined --init, incr, test, body
-           (ESetRef (EId i) (EOp ONumPlus [EDeref (EId i), ENumber 1]))
-           (EOp OLt [EDeref (EId i), EGetField (EDeref ae) (EString "length")])
-           (ESeq (setField (EId argsObj) (primToStr (getField (EId argsObj) 
-                                                      (EString "length")))
-                           (EGetField (EDeref ae) (primToStr (EDeref $ EId i))))
-                 (setField (EId argsObj) (EString "length")
-                   (EOp ONumPlus [getField (EId argsObj) (EString "length"),
-                                  ENumber 1]))))
-      (EId argsObj)
+    ELet2 nopos (ERef nopos (ENumber nopos 0))(ERef nopos$eArgumentsObj [] (EId nopos "this")) $ \i argsObj ->
+    ESeq nopos ( 
+      eFor (EUndefined nopos) --init, incr, test, body
+           (ESetRef nopos (EId nopos i) (EOp nopos ONumPlus [EDeref nopos (EId nopos i), ENumber nopos 1]))
+           (EOp nopos OLt [EDeref nopos (EId nopos i), EGetField nopos (EDeref nopos ae) (EString nopos "length")])
+           (ESeq nopos (setField (EId nopos argsObj) (primToStr (getField (EId nopos argsObj) 
+                                                      (EString nopos "length")))
+                           (EGetField nopos (EDeref nopos ae) (primToStr (EDeref nopos $ EId nopos i))))
+                 (setField (EId nopos argsObj) (EString nopos "length")
+                   (EOp nopos ONumPlus [getField (EId nopos argsObj) (EString nopos "length"),
+                                  ENumber nopos 1]))))
+      (EId nopos argsObj)
 
 
-hasClass eObj cls = eStxEq (getField eObj (EString "$class")) (EString cls)
+hasClass eObj cls = eStxEq (getField eObj (EString nopos "$class")) (EString nopos cls)
 
 
 -- |Section 15.6.4
-booleanPrototype :: Expr
+booleanPrototype :: ExprPos
 booleanPrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Boolean")
-  , ("$value", EBool False)
-  , ("constructor", EUndefined) -- Set to Boolean later
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Boolean")
+  , ("$value", EBool nopos False)
+  , ("constructor", EUndefined nopos) -- Set to Boolean later
   , ("toString", functionObject [] $ checkThis "Boolean" $
-      EIf (getFieldT (EString "$value")) (EString "true") (EString "false"))
+      EIf nopos (getFieldT (EString nopos "$value")) (EString nopos "true") (EString nopos "false"))
   , ("valueOf", functionObject [] $ checkThis "Boolean" $ 
-      getFieldT (EString "$value"))
+      getFieldT (EString nopos "$value"))
   ]
 
 
 -- |Section 15.5.3.1
-stringPrototype :: Expr
+stringPrototype :: ExprPos
 stringPrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "String") --yep, it's a string.
-  , ("$value", EString "")
-  , ("constructor", EUndefined) -- Set to String later
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "String") --yep, it's a string.
+  , ("$value", EString nopos "")
+  , ("constructor", EUndefined nopos) -- Set to String later
   , ("toString", tsvo)
   , ("valueOf", tsvo)
-  , ("charAt", EString "TODO: String.prototype.charAt")
-  , ("charCodeAt", EString "TODO: String.prototype.charCodeAt")
-  , ("concat", EString "TODO: String.prototype.concat")
-  , ("indexOf", EString "TODO: String.prototype.indexOf")
-  , ("lastIndexOf", EString "TODO: String.prototype.lastIndexOf")
-  , ("localeCompare", EString "TODO: String.prototype.localeCompare")
+  , ("charAt", EString nopos "TODO: String.prototype.charAt")
+  , ("charCodeAt", EString nopos "TODO: String.prototype.charCodeAt")
+  , ("concat", EString nopos "TODO: String.prototype.concat")
+  , ("indexOf", EString nopos "TODO: String.prototype.indexOf")
+  , ("lastIndexOf", EString nopos "TODO: String.prototype.lastIndexOf")
+  , ("localeCompare", EString nopos "TODO: String.prototype.localeCompare")
   , ("match", functionObject ["regexp"] $
       handleRegexp $ handleThis $
-        EIf (toBoolean $ EGetField (EDeref $ EId "$regexp") (EString "global"))
-            (EThrow $ EString "String.match w/ global #t NYI")
-            (applyObj (EGetField (EDeref $ EId "$regexp") (EString "exec"))
-                      (EId "$regexp")
-                      [EId "$this"]))
+        EIf nopos (toBoolean $ EGetField nopos (EDeref nopos $ EId nopos "$regexp") (EString nopos "global"))
+            (EThrow nopos $ EString nopos "String.match w/ global #t NYI")
+            (applyObj (EGetField nopos (EDeref nopos $ EId nopos "$regexp") (EString nopos "exec"))
+                      (EId nopos "$regexp")
+                      [EId nopos "$this"]))
   --TODO: do replace for real
   , ("replace", functionObject [] $
-    (EGetField (EDeref $ EId "this") (EString "$value")))
-  , ("search", EString "TODO: String.prototype.search")
-  , ("slice", EString "TODO: String.prototype.slice")
+    (EGetField nopos (EDeref nopos $ EId nopos "this") (EString nopos "$value")))
+  , ("search", EString nopos "TODO: String.prototype.search")
+  , ("slice", EString nopos "TODO: String.prototype.slice")
   , ("split", functionObject ["separator", "limit"] $
-    ELet [("$strThis", toString $ (EId "this"))] $
-      EIf (eAnd (isObject (EId "separator"))
-                (hasClass (EId "separator") "RegExp"))
-       (eNewDirect (EDeref $ EId "Array") (ERef $ ERef $ 
-         (EOp OStrSplitRegExp 
-           [EId "$strThis", 
-            getField (EId "separator") (EString "$regexpPattern")])))
-       (eNewDirect (EDeref $ EId "Array") (ERef $ ERef $ 
-         (EOp OStrSplitStrExp [EId "$strThis", toString $ (EId "separator")]))))
-  , ("substring", EString "TODO: String.prototype.substring")
-  , ("toLowerCase", EString "TODO: String.prototype.toLowerCase")
-  , ("toLocaleLowerCase", EString "TODO: String.prototype.toLocaleLowerCase")
-  , ("toUpperCase", EString "TODO: String.prototype.toUpperCase")
-  , ("toLocaleUpperCase", EString "TODO: String.prototype.toLocaleUpperCase")
-  , ("length", ENumber 0)
+    ELet nopos [("$strThis", toString $ (EId nopos "this"))] $
+      EIf nopos (eAnd (isObject (EId nopos "separator"))
+                (hasClass (EId nopos "separator") "RegExp"))
+       (eNewDirect (EDeref nopos $ EId nopos "Array") (ERef nopos $ ERef nopos $ 
+         (EOp nopos OStrSplitRegExp 
+           [EId nopos "$strThis", 
+            getField (EId nopos "separator") (EString nopos "$regexpPattern")])))
+       (eNewDirect (EDeref nopos $ EId nopos "Array") (ERef nopos $ ERef nopos $ 
+         (EOp nopos OStrSplitStrExp [EId nopos "$strThis", toString $ (EId nopos "separator")]))))
+  , ("substring", EString nopos "TODO: String.prototype.substring")
+  , ("toLowerCase", EString nopos "TODO: String.prototype.toLowerCase")
+  , ("toLocaleLowerCase", EString nopos "TODO: String.prototype.toLocaleLowerCase")
+  , ("toUpperCase", EString nopos "TODO: String.prototype.toUpperCase")
+  , ("toLocaleUpperCase", EString nopos "TODO: String.prototype.toLocaleUpperCase")
+  , ("length", ENumber nopos 0)
   ]
  where
   tsvo = functionObject [] $
-    EIf (eNot (hasClass (EId "this") "String"))
-        (EThrow $ newError "TypeError" "'this' from String's toString not str")
-        (EGetField (EDeref $ EId "this") (EString "$value"))
+    EIf nopos (eNot (hasClass (EId nopos "this") "String"))
+            (EThrow nopos $ newError "TypeError" "'this' from String's toString not str")
+            (EGetField nopos (EDeref nopos $ EId nopos "this") (EString nopos "$value"))
   --String.match helpers:
-  handleRegexp = ELet [("$regexp", 
-    EIf (eAnd (isRefComb isObject (EId "regexp")) 
-              (hasClass (EId "regexp") "RegExp"))
-        (EId "regexp")
-        (eNew (EDeref $ EId "RegExp") [EId "regexp"]))]
-  handleThis = ELet [("$this", toString (EId "this"))]
+  handleRegexp = ELet nopos [("$regexp", 
+    EIf nopos (eAnd (isRefComb isObject (EId nopos "regexp")) 
+              (hasClass (EId nopos "regexp") "RegExp"))
+        (EId nopos "regexp")
+        (eNew (EDeref nopos $ EId nopos "RegExp") [EId nopos "regexp"]))]
+  handleThis = ELet nopos [("$this", toString (EId nopos "this"))]
 
 
-numberPrototype :: Expr
+numberPrototype :: ExprPos
 numberPrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Number")
-  , ("$value", ENumber 0)
-  , ("constructor", EUndefined) -- Set to Number later
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Number")
+  , ("$value", ENumber nopos 0)
+  , ("constructor", EUndefined nopos) -- Set to Number later
   , ("toString", functionObject ["radix"] $ 
-      EIf (eNot (eOr (eStxEq (EId "radix") EUndefined)
-                     (eStxEq (EId "radix") (ENumber 10))))
-          (EThrow $ EString "num toStr for non-10 radix NYI")
-          (primToStr (getFieldT (EString "$value"))))
+      EIf nopos (eNot (eOr (eStxEq (EId nopos "radix") (EUndefined nopos))
+                     (eStxEq (EId nopos "radix") (ENumber nopos 10))))
+          (EThrow nopos $ EString nopos "num toStr for non-10 radix NYI")
+          (primToStr (getFieldT (EString nopos "$value"))))
   , ("toLocaleString", functionObject [] $ 
-      primToStr (getFieldT (EString "$value")))
-  , ("valueOf", functionObject [] $ getFieldT (EString "$value"))
-  , ("toFixed", functionObject [] $ EString "Number.toFixed")
-  , ("toExponential", functionObject ["fracDigs"] $ EString "Number.toExp")
-  , ("toPrecision", functionObject ["prec"] $ EString "Number.toPrecision")
+      primToStr (getFieldT (EString nopos "$value")))
+  , ("valueOf", functionObject [] $ getFieldT (EString nopos "$value"))
+  , ("toFixed", functionObject [] $ EString nopos "Number.toFixed")
+  , ("toExponential", functionObject ["fracDigs"] $ EString nopos "Number.toExp")
+  , ("toPrecision", functionObject ["prec"] $ EString nopos "Number.toPrecision")
   ]
 
 
-datePrototype :: Expr
+datePrototype :: ExprPos
 datePrototype = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Date")
-  , ("$value", ENumber (0.0/0.0))
-  , ("constructor", EUndefined) -- Set to Date later
-  , ("toString", functionObject [] (EString "THIS IS A DATE"))
-  , ("valueOf", functionObject [] (getFieldT (EString "$value")))
-  , ("toDateString", functionObject [] $ EString "dateString")
-  , ("toTimeString", functionObject [] $ EString "timeString")
-  , ("toLocaleString", functionObject [] $ EString "localeString")
-  , ("toLocaleDateString", functionObject [] $ EString "localeDateString")
-  , ("toLocaleTimeString", functionObject [] $ EString "localeTimeString")
-  , ("getTime", functionObject[]$checkThis"Date"$ getFieldT (EString "$value"))
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Date")
+  , ("$value", ENumber nopos (0.0/0.0))
+  , ("constructor", (EUndefined nopos)) -- Set to Date later
+  , ("toString", functionObject [] (EString nopos "THIS IS A DATE"))
+  , ("valueOf", functionObject [] (getFieldT (EString nopos "$value")))
+  , ("toDateString", functionObject [] $ EString nopos "dateString")
+  , ("toTimeString", functionObject [] $ EString nopos "timeString")
+  , ("toLocaleString", functionObject [] $ EString nopos "localeString")
+  , ("toLocaleDateString", functionObject [] $ EString nopos "localeDateString")
+  , ("toLocaleTimeString", functionObject [] $ EString nopos "localeTimeString")
+  , ("getTime", functionObject[]$checkThis"Date"$ getFieldT (EString nopos "$value"))
   , ("getFullYear", nyi)
   , ("getUTCFullYear", nyi)
   , ("getMonth", nyi)
@@ -723,99 +723,99 @@ datePrototype = object
   , ("toUTCString", nyi)
   ]
  where
-  nyi = functionObject [] $ EThrow $ EString "DATE FUNCS NYI"
+  nyi = functionObject [] $ EThrow nopos $ EString nopos "DATE FUNCS NYI"
 
 --errors
 --all errors are exactly the same, so these functions actually
 --generate an error of a given name.
-jsError protname = ERef $ object
-  [ ("$proto", EId "$Function.prototype") 
-  , ("$class", EString "Function")
-  , ("$strRep", EString $ nativeFunctionStrRep "Error")
-  , ("length", ENumber 1)
-  , ("prototype", EId protname)
+jsError protname = ERef nopos $ object
+  [ ("$proto", EId nopos "$Function.prototype") 
+  , ("$class", EString nopos "Function")
+  , ("$strRep", EString nopos $ nativeFunctionStrRep "Error")
+  , ("length", ENumber nopos 1)
+  , ("prototype", EId nopos protname)
   , ("$code", lambda ["msg"] $
-    ESeq (setFieldT (EString "$class") (EString "Error"))
-         (ESeq (setFieldT (EString "$proto") (EId protname))
-               (EIf (eNot (isUndefined (EId "msg")))
-                    (setFieldT (EString "message") (toString $ EId "msg"))
-                    EUndefined)))
+    ESeq nopos (setFieldT (EString nopos "$class") (EString nopos "Error"))
+             (ESeq nopos (setFieldT (EString nopos "$proto") (EId nopos protname))
+               (EIf nopos (eNot (isUndefined (EId nopos "msg")))
+                    (setFieldT (EString nopos "message") (toString $ EId nopos "msg"))
+                    (EUndefined nopos))))
   ]
 errorPrototype name = object
-  [ ("$proto", EId "$Object.prototype")
-  , ("$class", EString "Error")
-  , ("constructor", EUndefined) -- Set to be itself later
-  , ("name", EString name)
-  , ("message", EString (name ++ " error"))
+  [ ("$proto", EId nopos "$Object.prototype")
+  , ("$class", EString nopos "Error")
+  , ("constructor", EUndefined nopos) -- Set to be itself later
+  , ("name", EString nopos name)
+  , ("message", EString nopos (name ++ " error"))
   , ("toString", functionObject [] $ 
-       EOp OStrPlus [toString $ getFieldT (EString "name"),
-                     toString $ getFieldT (EString "message")])
+       EOp nopos OStrPlus [toString $ getFieldT (EString nopos "name"),
+                           toString $ getFieldT (EString nopos "message")])
   ]
 
 
-setConstructors :: Expr
-setConstructors = foldr ESeq EUndefined $ map doit
+setConstructors :: ExprPos
+setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit
   ["Object", "Function", "Array", "String", "RegExp", "Date", "Boolean",
    "Number", "Error", "ConversionError", "EvalError", "RangeError",
    "ReferenceError", "SyntaxError", "TypeError", "URIError"]
  where
-  doit name = ESetRef (EId ("$" ++ name ++ ".prototype"))
-                (EUpdateField (EDeref $ EId ("$" ++ name ++ ".prototype"))
-                              (EString "constructor")
-                              (EDeref $ EId name))
+  doit name = ESetRef nopos (EId nopos ("$" ++ name ++ ".prototype"))
+                (EUpdateField nopos (EDeref nopos $ EId nopos ("$" ++ name ++ ".prototype"))
+                              (EString nopos "constructor")
+                              (EDeref nopos $ EId nopos name))
   
-ecma262Env :: Expr -> Expr
+ecma262Env :: ExprPos -> ExprPos
 ecma262Env body = 
   --global is the initial object, at location 0
-  ELet [("$global", ERef $ object [])] $
+  ELet nopos [("$global", ERef nopos $ object [])] $
   --we immediately need function.prototype, since everything uses it
-  ELet [("$Object.prototype", ERef $ object [])] $
-  ELet [("$Function.prototype", ERef $ object [])] $
+  ELet nopos [("$Object.prototype", ERef nopos $ object [])] $
+  ELet nopos [("$Function.prototype", ERef nopos $ object [])] $
 
-  ELet [("$makeException", 
-              ELambda ["name", "msg"] $ eNew 
-                (EGetField (EDeref $ EId "$global") (EId "name"))
-                [EId "msg"])] $          
+  ELet nopos [("$makeException", 
+              ELambda nopos ["name", "msg"] $ eNew 
+                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
+                [EId nopos "msg"])] $          
 
-  updateObject (EId "$Object.prototype") objectPrototypeValues $
-  updateObject (EId "$Function.prototype") functionPrototypeValues $
-  ELet [("$Date.prototype", ERef datePrototype)] $
-  ELet [("$Number.prototype", ERef numberPrototype)] $
-  ELet [("$Array.prototype", ERef arrayPrototype)] $
-  ELet [("$Boolean.prototype", ERef booleanPrototype)] $
+  updateObject (EId nopos "$Object.prototype") objectPrototypeValues $
+  updateObject (EId nopos "$Function.prototype") functionPrototypeValues $
+  ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
+  ELet nopos [("$Number.prototype", ERef nopos numberPrototype)] $
+  ELet nopos [("$Array.prototype", ERef nopos arrayPrototype)] $
+  ELet nopos [("$Boolean.prototype", ERef nopos booleanPrototype)] $
 
-  ELet [("$Error.prototype", ERef (errorPrototype "Error"))] $
-  ELet [("$ConversionError.prototype", ERef(errorPrototype "ConversionError"))]$
-  ELet [("$EvalError.prototype", ERef (errorPrototype "EvalError"))] $ 
-  ELet [("$RangeError.prototype", ERef (errorPrototype "RangeError"))] $ 
-  ELet [("$ReferenceError.prototype", ERef (errorPrototype "ReferenceError"))]$
-  ELet [("$SyntaxError.prototype", ERef (errorPrototype "SyntaxError"))] $ 
-  ELet [("$TypeError.prototype", ERef (errorPrototype "TypeError"))] $ 
-  ELet [("$URIError.prototype", ERef (errorPrototype "URIError"))] $ 
+  ELet nopos [("$Error.prototype", ERef nopos (errorPrototype "Error"))] $
+  ELet nopos [("$ConversionError.prototype", ERef nopos(errorPrototype "ConversionError"))]$
+  ELet nopos [("$EvalError.prototype", ERef nopos (errorPrototype "EvalError"))] $ 
+  ELet nopos [("$RangeError.prototype", ERef nopos (errorPrototype "RangeError"))] $ 
+  ELet nopos [("$ReferenceError.prototype", ERef nopos (errorPrototype "ReferenceError"))]$
+  ELet nopos [("$SyntaxError.prototype", ERef nopos (errorPrototype "SyntaxError"))] $ 
+  ELet nopos [("$TypeError.prototype", ERef nopos (errorPrototype "TypeError"))] $ 
+  ELet nopos [("$URIError.prototype", ERef nopos (errorPrototype "URIError"))] $ 
 
-  ELet [("Object", ERef jsObject)] $
-  ELet [("Function", ERef jsFunction)] $
-  ELet [("Array", ERef jsArray)] $
+  ELet nopos [("Object", ERef nopos jsObject)] $
+  ELet nopos [("Function", ERef nopos jsFunction)] $
+  ELet nopos [("Array", ERef nopos jsArray)] $
   --regexp.proto uses Array, so it must come after
-  ELet [("$RegExp.prototype", ERef regExpPrototype)] $
-  ELet [("RegExp", ERef jsRegExp)] $
-  ELet [("Date", ERef jsDate)] $
-  ELet [("Number", ERef jsNumber)] $
+  ELet nopos [("$RegExp.prototype", ERef nopos regExpPrototype)] $
+  ELet nopos [("RegExp", ERef nopos jsRegExp)] $
+  ELet nopos [("Date", ERef nopos jsDate)] $
+  ELet nopos [("Number", ERef nopos jsNumber)] $
   --string.proto uses RegExp, so it must come after it.
-  ELet [("$String.prototype", ERef stringPrototype)] $
-  ELet [("String", ERef jsString)] $
-  ELet [("Boolean", ERef jsBoolean)] $
+  ELet nopos [("$String.prototype", ERef nopos stringPrototype)] $
+  ELet nopos [("String", ERef nopos jsString)] $
+  ELet nopos [("Boolean", ERef nopos jsBoolean)] $
   
-  ELet [("Error", ERef (jsError "$Error.prototype"))] $ 
-  ELet [("ConversionError", ERef (jsError "$ConversionError.prototype"))] $ 
-  ELet [("EvalError", ERef (jsError "$EvalError.prototype"))] $ 
-  ELet [("RangeError", ERef (jsError "$RangeError.prototype"))] $ 
-  ELet [("ReferenceError", ERef (jsError "$ReferenceError.prototype"))] $ 
-  ELet [("SyntaxError", ERef (jsError "$SyntaxError.prototype"))] $ 
-  ELet [("TypeError", ERef (jsError "$TypeError.prototype"))] $ 
-  ELet [("URIError", ERef (jsError "$URIError.prototype"))] $ 
+  ELet nopos [("Error", ERef nopos (jsError "$Error.prototype"))] $ 
+  ELet nopos [("ConversionError", ERef nopos (jsError "$ConversionError.prototype"))] $ 
+  ELet nopos [("EvalError", ERef nopos (jsError "$EvalError.prototype"))] $ 
+  ELet nopos [("RangeError", ERef nopos (jsError "$RangeError.prototype"))] $ 
+  ELet nopos [("ReferenceError", ERef nopos (jsError "$ReferenceError.prototype"))] $ 
+  ELet nopos [("SyntaxError", ERef nopos (jsError "$SyntaxError.prototype"))] $ 
+  ELet nopos [("TypeError", ERef nopos (jsError "$TypeError.prototype"))] $ 
+  ELet nopos [("URIError", ERef nopos (jsError "$URIError.prototype"))] $ 
 
-  ESeq setConstructors $
-  updateObject (EId "$global") globalValuesAndFunctions $
-  ELet [("this", EId "$global")] $
+  ESeq nopos setConstructors $
+  updateObject (EId nopos "$global") globalValuesAndFunctions $
+  ELet nopos [("this", EId nopos "$global")] $
   body

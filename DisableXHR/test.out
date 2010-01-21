@@ -1,0 +1,382 @@
+Safe Forms
+==========
+x < y
+x <= y
+x > y
+x >= y
+x instanceof y
+x == y
+x != y
+x === y
+x !== y
+x && y
+x || y
+x * y
+x / y
+x % y
+x - y
+x << y
+x >> y
+x >>> y
+x & y
+x ^ y
+x | y
+x + y
+x = y
+x += y
+x -= y
+x *= y
+x /= y
+x %= y
+x <<= y
+x >>= y
+x >>>= y
+x &= y
+x ^= y
+x |= y
+!x
+~x
++x
+-x
+typeof x
+void x
+delete x
+++x
+--x
+x++
+x--
+this
+obj.field = e
+obj[field] = e
+obj.x
+obj.XMLHttpRequest
+new obj(arg)
+e1 ? e2 : e3
+f(arg)
+new f(arg)
+{ x: e1, y: e2 }
+function(x) { body }
+e1 ? e2 : e3
+{ s1 ; s2 }
+if (e1) { s1 }
+if (e1) { s1 } else { s2 } 
+switch (e1) { case foo: s1
+ case bar: s2 }
+while (e1) { s1 }
+break lbl
+break
+continue lbl
+continue
+myLabel: s
+for (var x in e) { s }
+for (x in e) { s }
+for (var x = e1; e2; e3) { s }
+try { s1 } catch(x) { s2 }
+try { s1 } finally { s2 }
+throw e
+return e
+var x = e
+
+Unsafe Forms
+============
+obj[field]
+obj[field]++
+obj[field]--
+++obj[field]
+--obj[field]
+
+lookup is defined as:
+function(object, name)  { 
+       var banned = {
+          'arguments'     : true, 
+          callee          : true,
+          caller          : true,
+          constructor     : true,
+          'eval'          : true,
+          unwatch         : true,
+          valueOf         : true,
+          watch           : true 
+      };
+ var reject = function(object, name) { 
+      return typeof object !== 'object' || banned[name] || 
+              ((typeof name !== 'number' || name < 0) && 
+              (typeof name !== 'string' || name.charAt(0) === '_' || 
+              name.charAt(0) === '-')); 
+  }; 
+          if (arguments.length === 2 && !reject(object, name)) { 
+              return object[name]; 
+          } 
+          return undefined; 
+ }
+
+unsafe field lookup.
+type of field is Nothing
+("nothing" (line 0, column 0)
+ (let
+  (($toStr ("nothing" (line 0, column 0)
+            name)))
+  ("nothing" (line 0, column 0)
+   (if ("nothing" (line 0, column 0)
+        (=== ("nothing" (line 0, column 0)
+              (typeof ("nothing" (line 0, column 0)
+                       $toStr))) ("nothing" (line 0, column 0)
+                                  "location""nothing" (line 0, column 0))))
+    ("nothing" (line 0, column 0)
+     (prim->string ("nothing" (line 0, column 0)
+                    (let
+                     (($x ("nothing" (line 0, column 0)
+                           $toStr)))
+                     ("nothing" (line 0, column 0)
+                      (if ("nothing" (line 0, column 0)
+                           (=== ("nothing" (line 0, column 0)
+                                 (typeof ("nothing" (line 0, column 0)
+                                          $x))) ("nothing" (line 0, column 0)
+                                                 "location""nothing" (line 0, column 0))))
+                       ("nothing" (line 0, column 0)
+                        (let
+                         (($vOf ("nothing" (line 0, column 0)
+                                 (get-field
+                                  ("nothing" (line 0, column 0)
+                                   (deref ("nothing" (line 0, column 0)
+                                           $x)))
+                                  ("nothing" (line 0, column 0)
+                                   "valueOf""nothing" (line 0, column 0))))))
+                         ("nothing" (line 0, column 0)
+                          (if ("nothing" (line 0, column 0)
+                               (if ("nothing" (line 0, column 0)
+                                    (=== ("nothing" (line 0, column 0)
+                                          (typeof ("nothing" (line 0, column 0)
+                                                   $vOf))) ("nothing" (line 0, column 0)
+                                                            "location""nothing" (line 0, column 0))))
+                                ("nothing" (line 0, column 0)
+                                 (let
+                                  (($isF ("nothing" (line 0, column 0)
+                                          (deref ("nothing" (line 0, column 0)
+                                                  $vOf)))))
+                                  ("nothing" (line 0, column 0)
+                                   (if ("nothing" (line 0, column 0)
+                                        (=== ("nothing" (line 0, column 0)
+                                              (typeof ("nothing" (line 0, column 0)
+                                                       $isF))) ("nothing" (line 0, column 0)
+                                                                "object""nothing" (line 0, column 0))))
+                                    ("nothing" (line 0, column 0)
+                                     (=== ("nothing" (line 0, column 0)
+                                           (typeof ("nothing" (line 0, column 0)
+                                                    (get-field
+                                                     ("nothing" (line 0, column 0)
+                                                      $isF)
+                                                     ("nothing" (line 0, column 0)
+                                                      "$code""nothing" (line 0, column 0)))))) ("nothing" (line 0, column 0)
+                                                                                                "lambda""nothing" (line 0, column 0))))
+                                    ("nothing" (line 0, column 0)
+                                     #f"nothing" (line 0, column 0))))))
+                                ("nothing" (line 0, column 0)
+                                 #f"nothing" (line 0, column 0))))
+                           ("nothing" (line 0, column 0)
+                            (let
+                             (($vRes ("nothing" (line 0, column 0)
+                                      (let
+                                       (($1 ("nothing" (line 0, column 0)
+                                             $vOf)))
+                                       ("nothing" (line 0, column 0)
+                                        (("nothing" (line 0, column 0)
+                                          (get-field
+                                           ("nothing" (line 0, column 0)
+                                            (deref ("nothing" (line 0, column 0)
+                                                    $1)))
+                                           ("nothing" (line 0, column 0)
+                                            "$code""nothing" (line 0, column 0)))) ("nothing" (line 0, column 0)
+                                                                                    $x) ("nothing" (line 0, column 0)
+                                                                                         (alloc ("nothing" (line 0, column 0)
+                                                                                                 (alloc ("nothing" (line 0, column 0)
+                                                                                                         (object ("length" ("nothing" (line 0, column 0)
+                                                                                                                            0.0"nothing" (line 0, column 0)))
+                                                                                                                 ("callee" ("nothing" (line 0, column 0)
+                                                                                                                            $1))
+                                                                                                                 ("$class" ("nothing" (line 0, column 0)
+                                                                                                                            "Object""nothing" (line 0, column 0)))
+                                                                                                                 ("$proto" ("nothing" (line 0, column 0)
+                                                                                                                            $Object.prototype))
+                                                                                                                 ("$isArgs" ("nothing" (line 0, column 0)
+                                                                                                                             #t"nothing" (line 0, column 0)))))))))))))))
+                             ("nothing" (line 0, column 0)
+                              (if ("nothing" (line 0, column 0)
+                                   (prim? ("nothing" (line 0, column 0)
+                                           $vRes)))
+                               ("nothing" (line 0, column 0)
+                                $vRes)
+                               ("nothing" (line 0, column 0)
+                                (let
+                                 (($toStr ("nothing" (line 0, column 0)
+                                           (get-field
+                                            ("nothing" (line 0, column 0)
+                                             (deref ("nothing" (line 0, column 0)
+                                                     $x)))
+                                            ("nothing" (line 0, column 0)
+                                             "toString""nothing" (line 0, column 0))))))
+                                 ("nothing" (line 0, column 0)
+                                  (if ("nothing" (line 0, column 0)
+                                       (if ("nothing" (line 0, column 0)
+                                            (=== ("nothing" (line 0, column 0)
+                                                  (typeof ("nothing" (line 0, column 0)
+                                                           $toStr))) ("nothing" (line 0, column 0)
+                                                                      "location""nothing" (line 0, column 0))))
+                                        ("nothing" (line 0, column 0)
+                                         (let
+                                          (($isF ("nothing" (line 0, column 0)
+                                                  (deref ("nothing" (line 0, column 0)
+                                                          $toStr)))))
+                                          ("nothing" (line 0, column 0)
+                                           (if ("nothing" (line 0, column 0)
+                                                (=== ("nothing" (line 0, column 0)
+                                                      (typeof ("nothing" (line 0, column 0)
+                                                               $isF))) ("nothing" (line 0, column 0)
+                                                                        "object""nothing" (line 0, column 0))))
+                                            ("nothing" (line 0, column 0)
+                                             (=== ("nothing" (line 0, column 0)
+                                                   (typeof ("nothing" (line 0, column 0)
+                                                            (get-field
+                                                             ("nothing" (line 0, column 0)
+                                                              $isF)
+                                                             ("nothing" (line 0, column 0)
+                                                              "$code""nothing" (line 0, column 0)))))) ("nothing" (line 0, column 0)
+                                                                                                        "lambda""nothing" (line 0, column 0))))
+                                            ("nothing" (line 0, column 0)
+                                             #f"nothing" (line 0, column 0))))))
+                                        ("nothing" (line 0, column 0)
+                                         #f"nothing" (line 0, column 0))))
+                                   ("nothing" (line 0, column 0)
+                                    (let
+                                     (($tRes ("nothing" (line 0, column 0)
+                                              (let
+                                               (($2 ("nothing" (line 0, column 0)
+                                                     $toStr)))
+                                               ("nothing" (line 0, column 0)
+                                                (("nothing" (line 0, column 0)
+                                                  (get-field
+                                                   ("nothing" (line 0, column 0)
+                                                    (deref ("nothing" (line 0, column 0)
+                                                            $2)))
+                                                   ("nothing" (line 0, column 0)
+                                                    "$code""nothing" (line 0, column 0)))) ("nothing" (line 0, column 0)
+                                                                                            $x) ("nothing" (line 0, column 0)
+                                                                                                 (alloc ("nothing" (line 0, column 0)
+                                                                                                         (alloc ("nothing" (line 0, column 0)
+                                                                                                                 (object ("length" ("nothing" (line 0, column 0)
+                                                                                                                                    0.0"nothing" (line 0, column 0)))
+                                                                                                                         ("callee" ("nothing" (line 0, column 0)
+                                                                                                                                    $2))
+                                                                                                                         ("$class" ("nothing" (line 0, column 0)
+                                                                                                                                    "Object""nothing" (line 0, column 0)))
+                                                                                                                         ("$proto" ("nothing" (line 0, column 0)
+                                                                                                                                    $Object.prototype))
+                                                                                                                         ("$isArgs" ("nothing" (line 0, column 0)
+                                                                                                                                     #t"nothing" (line 0, column 0)))))))))))))))
+                                     ("nothing" (line 0, column 0)
+                                      (if ("nothing" (line 0, column 0)
+                                           (prim? ("nothing" (line 0, column 0)
+                                                   $tRes)))
+                                       ("nothing" (line 0, column 0)
+                                        $tRes)
+                                       ("nothing" (line 0, column 0)
+                                        (throw ("nothing" (line 0, column 0)
+                                                (("nothing" (line 0, column 0)
+                                                  $makeException) ("nothing" (line 0, column 0)
+                                                                   "TypeError""nothing" (line 0, column 0)) ("nothing" (line 0, column 0)
+                                                                                                             ":cannot convert obj to primitive""nothing" (line 0, column 0))))))))))
+                                   ("nothing" (line 0, column 0)
+                                    (throw ("nothing" (line 0, column 0)
+                                            (("nothing" (line 0, column 0)
+                                              $makeException) ("nothing" (line 0, column 0)
+                                                               "TypeError""nothing" (line 0, column 0)) ("nothing" (line 0, column 0)
+                                                                                                         ":cannot convert obj to primitive""nothing" (line 0, column 0))))))))))))))
+                           ("nothing" (line 0, column 0)
+                            (let
+                             (($toStr ("nothing" (line 0, column 0)
+                                       (get-field
+                                        ("nothing" (line 0, column 0)
+                                         (deref ("nothing" (line 0, column 0)
+                                                 $x)))
+                                        ("nothing" (line 0, column 0)
+                                         "toString""nothing" (line 0, column 0))))))
+                             ("nothing" (line 0, column 0)
+                              (if ("nothing" (line 0, column 0)
+                                   (if ("nothing" (line 0, column 0)
+                                        (=== ("nothing" (line 0, column 0)
+                                              (typeof ("nothing" (line 0, column 0)
+                                                       $toStr))) ("nothing" (line 0, column 0)
+                                                                  "location""nothing" (line 0, column 0))))
+                                    ("nothing" (line 0, column 0)
+                                     (let
+                                      (($isF ("nothing" (line 0, column 0)
+                                              (deref ("nothing" (line 0, column 0)
+                                                      $toStr)))))
+                                      ("nothing" (line 0, column 0)
+                                       (if ("nothing" (line 0, column 0)
+                                            (=== ("nothing" (line 0, column 0)
+                                                  (typeof ("nothing" (line 0, column 0)
+                                                           $isF))) ("nothing" (line 0, column 0)
+                                                                    "object""nothing" (line 0, column 0))))
+                                        ("nothing" (line 0, column 0)
+                                         (=== ("nothing" (line 0, column 0)
+                                               (typeof ("nothing" (line 0, column 0)
+                                                        (get-field
+                                                         ("nothing" (line 0, column 0)
+                                                          $isF)
+                                                         ("nothing" (line 0, column 0)
+                                                          "$code""nothing" (line 0, column 0)))))) ("nothing" (line 0, column 0)
+                                                                                                    "lambda""nothing" (line 0, column 0))))
+                                        ("nothing" (line 0, column 0)
+                                         #f"nothing" (line 0, column 0))))))
+                                    ("nothing" (line 0, column 0)
+                                     #f"nothing" (line 0, column 0))))
+                               ("nothing" (line 0, column 0)
+                                (let
+                                 (($tRes ("nothing" (line 0, column 0)
+                                          (let
+                                           (($3 ("nothing" (line 0, column 0)
+                                                 $toStr)))
+                                           ("nothing" (line 0, column 0)
+                                            (("nothing" (line 0, column 0)
+                                              (get-field
+                                               ("nothing" (line 0, column 0)
+                                                (deref ("nothing" (line 0, column 0)
+                                                        $3)))
+                                               ("nothing" (line 0, column 0)
+                                                "$code""nothing" (line 0, column 0)))) ("nothing" (line 0, column 0)
+                                                                                        $x) ("nothing" (line 0, column 0)
+                                                                                             (alloc ("nothing" (line 0, column 0)
+                                                                                                     (alloc ("nothing" (line 0, column 0)
+                                                                                                             (object ("length" ("nothing" (line 0, column 0)
+                                                                                                                                0.0"nothing" (line 0, column 0)))
+                                                                                                                     ("callee" ("nothing" (line 0, column 0)
+                                                                                                                                $3))
+                                                                                                                     ("$class" ("nothing" (line 0, column 0)
+                                                                                                                                "Object""nothing" (line 0, column 0)))
+                                                                                                                     ("$proto" ("nothing" (line 0, column 0)
+                                                                                                                                $Object.prototype))
+                                                                                                                     ("$isArgs" ("nothing" (line 0, column 0)
+                                                                                                                                 #t"nothing" (line 0, column 0)))))))))))))))
+                                 ("nothing" (line 0, column 0)
+                                  (if ("nothing" (line 0, column 0)
+                                       (prim? ("nothing" (line 0, column 0)
+                                               $tRes)))
+                                   ("nothing" (line 0, column 0)
+                                    $tRes)
+                                   ("nothing" (line 0, column 0)
+                                    (throw ("nothing" (line 0, column 0)
+                                            (("nothing" (line 0, column 0)
+                                              $makeException) ("nothing" (line 0, column 0)
+                                                               "TypeError""nothing" (line 0, column 0)) ("nothing" (line 0, column 0)
+                                                                                                         ":cannot convert obj to primitive""nothing" (line 0, column 0))))))))))
+                               ("nothing" (line 0, column 0)
+                                (throw ("nothing" (line 0, column 0)
+                                        (("nothing" (line 0, column 0)
+                                          $makeException) ("nothing" (line 0, column 0)
+                                                           "TypeError""nothing" (line 0, column 0)) ("nothing" (line 0, column 0)
+                                                                                                     ":cannot convert obj to primitive""nothing" (line 0, column 0))))))))))))))
+                       ("nothing" (line 0, column 0)
+                        $x)))))))
+    ("nothing" (line 0, column 0)
+     (prim->string ("nothing" (line 0, column 0)
+                    $toStr)))))))

@@ -37,110 +37,108 @@ prop p = case p of
 -- primitive boolean values.
 boolExpr :: Expression a -> Bool
 boolExpr e = case e of
-  InfixExpr _ op _ _ -> 
+  InfixExpr a op _ _ -> 
     op `elem` [OpLT, OpLEq, OpGT, OpGEq, OpIn, OpInstanceof, OpEq, OpNEq,
                OpNEq, OpStrictEq, OpStrictNEq, OpLAnd, OpLOr]
-  PrefixExpr _ PrefixLNot _ -> True
+  PrefixExpr a PrefixLNot _ -> True
   otherwise -> True
            
 
+getGlobalVar fname = EGetField nopos (EDeref nopos $ EId nopos "$global") (EString nopos fname)
 
-getGlobalVar fname = EGetField (EDeref $ EId "$global") (EString fname)
-
-
-eStxEq :: Expr -> Expr -> Expr
-eStxEq e1 e2 = EOp OStrictEq [e1, e2]
+eStxEq :: ExprPos -> ExprPos -> ExprPos
+eStxEq e1 e2 = EOp nopos OStrictEq [e1, e2]
 
 
 --turn 2 boolean exprs into 1 expr that is the or/and
-eAnd e1 e2 = EIf e1 e2 (EBool False)
-eOr e1 e2 = ELet [("$or", e1)] $ EIf (EId "$or") (EId "$or") e2
-eNot e1 = EIf e1 (EBool False) (EBool True)
+eAnd e1 e2 = EIf nopos e1 e2 (EBool nopos False)
+eOr e1 e2 = ELet nopos [("$or", e1)] $ EIf nopos (EId nopos "$or") (EId nopos "$or") e2
+eNot e1 = EIf nopos e1 (EBool nopos False) (EBool nopos True)
 
 
-typeIs :: Expr -> String -> Expr
-typeIs e s = eStxEq (EOp OTypeof [e]) (EString s)
+typeIs :: ExprPos -> String -> ExprPos
+typeIs e s = eStxEq (EOp nopos OTypeof [e]) (EString nopos s)
 
 
 --get the base value if it's a reference. 
-getValue :: Expr -> Expr
-getValue e = ELet [("$x", e)] $
-  EIf (typeIs (EId "$x") "location")
-      (EDeref (EId "$x"))
-      (EId "$x")
+getValue :: ExprPos -> ExprPos
+getValue e = ELet nopos [("$x", e)] $
+  EIf nopos (typeIs (EId nopos "$x") "location")
+      (EDeref nopos (EId nopos "$x"))
+      (EId nopos "$x")
 
 
 isObject e = typeIs e "object"
 isLocation e = typeIs e "location"
 isLambda e = typeIs e "lambda"
 isString e = typeIs e "string"
-isPrim e = EOp OIsPrim [e]
+isPrim e = EOp nopos OIsPrim [e]
 isNumber e = typeIs e "number"
 isUndefined e = typeIs e "undefined"
-isNull e = eStxEq e ENull
-isFunctionObj e = ELet [("$isF", e)] $ 
-  eAnd (isObject (EId "$isF"))
-       (isLambda (EGetField (EId "$isF") (EString "$code")))
+isNull e = eStxEq e (ENull nopos)
+isFunctionObj e = ELet nopos [("$isF", e)] $ 
+  eAnd (isObject (EId nopos "$isF"))
+       (isLambda (EGetField nopos (EId nopos "$isF") (EString nopos "$code")))
 --combinator for refs:      
-isRefComb f e = eAnd (isLocation e) (f (EDeref e))
+isRefComb f e = eAnd (isLocation e) (f (EDeref nopos e))
 
 
-primToNum e = EOp OPrimToNum [e]
-primToStr e = EOp OPrimToStr [e]
-primToBool e = EOp OPrimToBool [e]
+primToNum e = EOp (label e) OPrimToNum [e]
+primToStr e = EOp (label e) OPrimToStr [e]
+primToBool e = EOp (label e) OPrimToBool [e]
 
 
 --turn a list of expressions into an arguments object
-eArgumentsObj :: [Expr] -> Expr -> Expr
-eArgumentsObj es callee = EObject (
-  [("length", ENumber $ fromIntegral $ length es),
+eArgumentsObj :: [ExprPos] -> ExprPos -> ExprPos
+eArgumentsObj es callee = EObject  nopos (
+  [("length", ENumber nopos $ fromIntegral $ length es),
    ("callee", callee),
-   ("$class", EString "Object"),
-   ("$proto", EId "$Object.prototype"),
-   ("$isArgs", EBool True) --used in apply to check correct type
+   ("$class", EString nopos "Object"),
+   ("$proto", EId nopos "$Object.prototype"),
+   ("$isArgs", EBool nopos True) --used in apply to check correct type
    ] ++
   (map (\ix -> (show ix, (es !! ix))) [0..((length es)-1)]))
 
 
 --desugar applying an object
-applyObj :: Expr -> Expr -> [Expr] -> Expr
-applyObj efuncobj ethis es = ELet1 efuncobj $ \x ->
-    EApp (EGetField (EDeref $ EId x) (EString "$code")) [ethis, args x]
-  where args x = ERef $ ERef $ eArgumentsObj es (EId x)
+applyObj :: ExprPos -> ExprPos -> [ExprPos] -> ExprPos
+applyObj efuncobj ethis es = ELet1 nopos efuncobj $ \x ->
+    EApp (label efuncobj) (EGetField (label ethis) (EDeref nopos $ EId nopos x) (EString nopos "$code")) [ethis, args x]
+  where args x = ERef nopos $ ERef nopos $ eArgumentsObj es (EId nopos x)
 
 
 -- |Algorithm 11.9.6 of ECMA-262, 3rd edition.  OStrictEq accounts for floating
 -- point numbers.  Everything else is syntactic equality.
-strictEquality :: Expr -> Expr -> Expr
+strictEquality :: ExprPos -> ExprPos -> ExprPos
 strictEquality =  eStxEq
 
 -- |Algorithm 9.9 of ECMA-262, ed. 3.
 --if given an object, expects it to be a (ERef (EObject))
 --it itself returns Refs
-toObject :: Expr -> Expr
+toObject :: ExprPos -> ExprPos
 toObject e = 
-  ELet1 e $ \x -> 
-    EIf (typeIs (EId x) "undefined")
-        (EThrow $ newError "TypeError" "toObject received undefined") $        
-    EIf (eStxEq (EId x) ENull)
-        (EThrow $ newError "TypeError" "toObject received null") $
-    EIf (typeIs (EId x) "boolean") 
-        (ERef $ EObject
-          [ ("$proto", EId "$Boolean.prototype")
-          , ("$class", EString "Boolean")
-          , ("$value", EId x)]) $ 
-    EIf (typeIs (EId x) "number")
-        (ERef $ EObject
-          [ ("$proto", EId "$Number.prototype")
-          , ("$class", EString "Number")
-          , ("$value", EId x)]) $ 
-    EIf (typeIs (EId x) "string")
-        (ERef $ EObject 
-          [ ("$proto", EId "$String.prototype")
-          , ("$class", EString "String")
-          , ("$value", EId x)
-          , ("length", EOp OStrLen [EId x])]) $
-    (EId x)
+  ELet1 nopos e $ \x -> 
+    EIf nopos (typeIs (EId nopos x) "undefined")
+        (EThrow nopos $ newError "TypeError" "toObject received undefined") $        
+    EIf nopos (eStxEq (EId nopos x) (ENull nopos))
+        (EThrow nopos $ newError "TypeError" "toObject received null") $
+    EIf nopos (typeIs (EId nopos x) "boolean") 
+        (ERef nopos $ EObject nopos
+          [ ("$proto", EId nopos "$Boolean.prototype")
+          , ("$class", EString nopos "Boolean")
+          , ("$value", EId nopos x)]) $ 
+    EIf nopos (typeIs (EId nopos x) "number")
+        (ERef nopos $ EObject nopos
+          [ ("$proto", EId nopos "$Number.prototype")
+          , ("$class", EString nopos "Number")
+          , ("$value", EId nopos x)]) $ 
+    EIf nopos (typeIs (EId nopos x) "string")
+        (ERef nopos $ EObject nopos
+          [ ("$proto", EId nopos "$String.prototype")
+          , ("$class", EString nopos "String")
+          , ("$value", EId nopos x)
+          , ("length", EOp nopos OStrLen [EId nopos x])]) $
+    (EId nopos x)
 
 
 -- |According to the specification, toPrimitive may signal a TypeError.
@@ -149,33 +147,33 @@ toObject e =
 -- Even though GetValue'd values are given to ToPrimitive in ECMA,
 -- here we need ERefs because we will apply functions.
 -- So make sure you give this ERef (EObject) if you get an object.
-toPrimitive_ :: String -> String -> Expr -> Expr
+toPrimitive_ :: String -> String -> ExprPos -> ExprPos
 toPrimitive_ first second e = 
   --if it's an object ref, then convert it with methods
   --otherwise it is already primitive, so just return it.
-  ELet [("$x", e)] $ 
-    EIf (isLocation (EId "$x"))
+  ELet nopos [("$x", e)] $ 
+    EIf nopos (isLocation (EId nopos "$x"))
         cvt
-        (EId "$x")
+        (EId nopos "$x")
   -- [[DefaultValue]] (8.6.2.6)
   where 
     --if valueOf is a function, try it. else try tostr.
-    cvt = ELet [("$vOf", (EGetField (EDeref (EId "$x")) (EString first)))] $    
-            EIf (isRefComb isFunctionObj (EId "$vOf"))
-              (ELet [("$vRes", applyObj (EId "$vOf") (EId "$x") [])] $
-                EIf (isPrim (EId "$vRes"))
-                    (EId "$vRes")
+    cvt = ELet nopos [("$vOf", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos first)))] $    
+            EIf nopos (isRefComb isFunctionObj (EId nopos "$vOf"))
+              (ELet nopos [("$vRes", applyObj (EId nopos "$vOf") (EId nopos "$x") [])] $
+                EIf nopos (isPrim (EId nopos "$vRes"))
+                    (EId nopos "$vRes")
                     str)
               str
     --if toString is a function, try it. else throw excp
-    str = ELet [("$toStr", (EGetField (EDeref (EId "$x")) (EString second)))] $
-            EIf (isRefComb isFunctionObj (EId "$toStr"))
-              (ELet [("$tRes", applyObj (EId "$toStr") (EId "$x") [])] $
-                EIf (isPrim (EId "$tRes"))
-                    (EId "$tRes")
+    str = ELet nopos [("$toStr", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos second)))] $
+            EIf nopos (isRefComb isFunctionObj (EId nopos "$toStr"))
+              (ELet nopos [("$tRes", applyObj (EId nopos "$toStr") (EId nopos "$x") [])] $
+                EIf nopos (isPrim (EId nopos "$tRes"))
+                    (EId nopos "$tRes")
                     exc)
               exc
-    exc = (EThrow $ newError "TypeError" "cannot convert obj to primitive")
+    exc = (EThrow nopos $ newError "TypeError" "cannot convert obj to primitive")
 
 
 toPrimitive_String = toPrimitive_ "toString" "valueOf"
@@ -185,12 +183,12 @@ toPrimitive = toPrimitive_Number
 
 --ECMA 9.3
 --once again, must get object refs to pass them in as 'this' in toPrimitive
-toNumber :: Expr -> Expr
+toNumber :: ExprPos -> ExprPos
 toNumber e = 
-  ELet [("$toNum", e)] $
-    EIf (isLocation (EId "$toNum"))
-        (primToNum $ toPrimitive_Number (EId "$toNum"))
-        (primToNum (EId "$toNum"))
+  ELet nopos [("$toNum", e)] $
+    EIf nopos (isLocation (EId nopos "$toNum"))
+        (primToNum $ toPrimitive_Number (EId nopos "$toNum"))
+        (primToNum (EId nopos "$toNum"))
 
 
 toBoolean = primToBool
@@ -199,29 +197,29 @@ toBoolean = primToBool
 -- |Algorithm 9.8
 -- expects objects to be locations to be able to call toPrimitive.
 -- otherwise it should be a value.
-toString :: Expr -> Expr
+toString :: ExprPos -> ExprPos
 toString e =
-  ELet [("$toStr", e)] $
-    EIf (isLocation (EId "$toStr"))
-        (primToStr $ toPrimitive (EId "$toStr"))
-        (primToStr (EId "$toStr"))
+  ELet nopos [("$toStr", e)] $
+    EIf nopos (isLocation (EId nopos "$toStr"))
+        (primToStr $ toPrimitive (EId nopos "$toStr"))
+        (primToStr (EId nopos "$toStr"))
 
 
-abstractEquality :: Expr -> Expr -> Expr
-abstractEquality e1 e2 = ELet [("$lhs", e1), ("$rhs", e2)] $
-  EIf (EOp OAbstractEq [EId "$lhs", EId "$rhs"]) 
-      (EBool True) $
-  EIf (isLocation (EId "$lhs"))
-      (EOp OAbstractEq [toPrimitive (EId "$lhs"), EId "$rhs"]) $
-  EIf (isLocation (EId "$rhs"))
-      (EOp OAbstractEq [EId "$lhs", toPrimitive (EId "$rhs")])
-      (EBool False)
+abstractEquality :: ExprPos -> ExprPos -> ExprPos
+abstractEquality e1 e2 = ELet nopos [("$lhs", e1), ("$rhs", e2)] $
+  EIf nopos (EOp nopos OAbstractEq [EId nopos "$lhs", EId nopos "$rhs"]) 
+      (EBool nopos True) $
+  EIf nopos (isLocation (EId nopos "$lhs"))
+      (EOp nopos OAbstractEq [toPrimitive (EId nopos "$lhs"), EId nopos "$rhs"]) $
+  EIf nopos (isLocation (EId nopos "$rhs"))
+      (EOp nopos OAbstractEq [EId nopos "$lhs", toPrimitive (EId nopos "$rhs")])
+      (EBool nopos False)
 
 
 
       
 --(in order of appearance in the spec)
-infixOp :: InfixOp -> Expr -> Expr -> Expr
+infixOp :: InfixOp -> ExprPos -> ExprPos -> ExprPos
 infixOp op e1 e2 = case op of
   --ECMA 11.5. 
   OpMul -> o OMul
@@ -238,50 +236,50 @@ infixOp op e1 e2 = case op of
       --   desugar[[e1 + e2]] = let (x = let (obj = desugar[[e1]]) ..., 
       --                             y = let (obj = desugar[[e2]]) ...) ...
       -- which can still be expressed as a two-holed context.
-      ELet [("$addLhs", toPrimitive (EId "$opLhs")),
-            ("$addRhs", toPrimitive (EId "$opRhs"))] $
-        EIf (eOr (typeIs (EId "$addLhs") "string")
-                 (typeIs (EId "$addRhs") "string"))
+      ELet nopos [("$addLhs", toPrimitive (EId nopos "$opLhs")),
+            ("$addRhs", toPrimitive (EId nopos "$opRhs"))] $
+        EIf nopos (eOr (typeIs (EId nopos "$addLhs") "string")
+                 (typeIs (EId nopos "$addRhs") "string"))
             --we can use prim->str and prim->num here instead
             --of toString/toNumber because the exprs are already
             --converted to primitives.
-            (EOp OStrPlus [primToStr $ EId "$addLhs",
-                           primToStr $ EId "$addRhs"])
-            (EOp ONumPlus [primToNum $ EId "$addLhs", 
-                           primToNum $ EId "$addRhs"])  
+            (EOp nopos OStrPlus [primToStr $ EId nopos "$addLhs",
+                           primToStr $ EId nopos "$addRhs"])
+            (EOp nopos ONumPlus [primToNum $ EId nopos "$addLhs", 
+                           primToNum $ EId nopos "$addRhs"])  
   OpSub -> o OSub --11.6.2
   
   OpLShift -> shift OLShift 
   OpSpRShift -> shift OSpRShift
   OpZfRShift -> shift OZfRShift
     
-  OpLT -> binds e1 e2 $ checkLtGt $ lt (EId "$opLhs") (EId "$opRhs")
-  OpGT -> binds e1 e2 $ checkLtGt $ lt (EId "$opRhs") (EId "$opLhs") 
-  OpLEq -> binds e1 e2 $ checkLeqGeq $ lt (EId "$opRhs") (EId "$opLhs")
-  OpGEq -> binds e1 e2 $ checkLeqGeq $ lt (EId "$opLhs") (EId "$opRhs") 
+  OpLT -> binds e1 e2 $ checkLtGt $ lt (EId nopos "$opLhs") (EId nopos "$opRhs")
+  OpGT -> binds e1 e2 $ checkLtGt $ lt (EId nopos "$opRhs") (EId nopos "$opLhs") 
+  OpLEq -> binds e1 e2 $ checkLeqGeq $ lt (EId nopos "$opRhs") (EId nopos "$opLhs")
+  OpGEq -> binds e1 e2 $ checkLeqGeq $ lt (EId nopos "$opLhs") (EId nopos "$opRhs") 
 
   --11.8.6, 15.3.5.3
-  OpInstanceof -> ELet [("$lhs", e1), ("$rhs", e2)] $
-    EIf (eNot (isRefComb isFunctionObj (EId "$rhs"))) 
-      (EThrow $ newError "TypeError" "instanceof args of wrong type") $
-      EIf (eNot $ isRefComb isObject (EId "$lhs")) (EBool False) $
-        ELet1 (EGetField (EDeref$EId "$rhs") (EString "prototype")) $ \fProt ->
-        ELet2 (ERef $ EId "$lhs") (ERef (EBool False))$ \curLHS res ->
-          ESeq 
-            (ELabel "$break" $ 
+  OpInstanceof -> ELet nopos [("$lhs", e1), ("$rhs", e2)] $
+    EIf nopos (eNot (isRefComb isFunctionObj (EId nopos "$rhs"))) 
+      (EThrow nopos $ newError "TypeError" "instanceof args of wrong type") $
+      EIf nopos (eNot $ isRefComb isObject (EId nopos "$lhs")) (EBool nopos False) $
+        ELet1 nopos (EGetField nopos (EDeref nopos $EId nopos "$rhs") (EString nopos "prototype")) $ \fProt ->
+        ELet2 nopos (ERef nopos $ EId nopos "$lhs") (ERef nopos (EBool nopos False))$ \curLHS res ->
+          ESeq nopos
+            (ELabel nopos "$break" $ 
               --while the curLHS isn't null:
-              EWhile (eNot $ isNull (EDeref $ EId curLHS)) $
+              EWhile nopos (eNot $ isNull (EDeref nopos $ EId nopos curLHS)) $
                 --if it matches the rhs.prototype, we're done
-                EIf (eStxEq (EDeref $ EId curLHS) (EId fProt))
-                 (ESeq (ESetRef (EId res) (EBool True))
-                       (EBreak "$break" EUndefined))
+                EIf nopos (eStxEq (EDeref nopos $ EId nopos curLHS) (EId nopos fProt))
+                 (ESeq nopos (ESetRef nopos (EId nopos res) (EBool nopos True))
+                       (EBreak nopos "$break" (EUndefined nopos)))
                  --otherwise go up once the prototype chain
-                 (ESetRef (EId curLHS) (EGetField (EDeref $EDeref $ EId curLHS) 
-                                                  (EString "$proto"))))
-            (EDeref $ EId res)
+                 (ESetRef nopos (EId nopos curLHS) (EGetField nopos (EDeref nopos $EDeref nopos $ EId nopos curLHS) 
+                                                  (EString nopos "$proto"))))
+            (EDeref nopos $ EId nopos res)
 
-  OpIn -> ELet2 (toString e1) (toObject e2) $ \fieldId objId -> 
-    EOp OHasOwnProp [EDeref $ EId objId, EId fieldId]
+  OpIn -> ELet2 nopos (toString e1) (toObject e2) $ \fieldId objId -> 
+    EOp nopos OHasOwnProp [EDeref nopos $ EId nopos objId, EId nopos fieldId]
   OpEq -> abstractEquality e1 e2
   OpNEq -> eNot $ abstractEquality e1 e2
   OpStrictEq -> strictEquality e1 e2
@@ -297,94 +295,94 @@ infixOp op e1 e2 = case op of
   --you don't want b to be reduced to an (object), because if you
   --do: print(a&&b), b must be a ref to to the tostring conv. properly.
   OpLAnd -> 
-    ELet [("$lAnd", e1)] $
-      EIf (eNot $ toBoolean (EId "$lAnd"))
-          (EId "$lAnd")
+    ELet nopos [("$lAnd", e1)] $
+      EIf nopos (eNot $ toBoolean (EId nopos "$lAnd"))
+          (EId nopos "$lAnd")
           e2
   OpLOr -> 
-    ELet [("$lOr", e1)] $
-      EIf (toBoolean (EId "$lOr"))
-          (EId "$lOr")
+    ELet nopos [("$lOr", e1)] $
+      EIf nopos (toBoolean (EId nopos "$lOr"))
+          (EId nopos  "$lOr")
           e2
     
   where 
     --steps 1-4 of the algs
     binds l r e =
-      ELet [("$opLhs", l),
-            ("$opRhs", r)] e
+      ELet nopos [("$opLhs", l),
+                  ("$opRhs", r)] e
     --bit-shifts (11.7.1) 
     shift eop =
       binds e1 e2 $ 
         --toint32 only takes numbers, so must do that here:
-        ELet [("$lhsShift", EOp OToInt32 [toNumber (EId "$opLhs")]),
-              ("$rhsShift", EOp OToUInt32 [toNumber (EId "$opRhs")])] $
-          ELet [("$rhsShift2", EOp OBAnd [EId "$rhsShift", 
+        ELet nopos [("$lhsShift", EOp nopos OToInt32 [toNumber (EId nopos "$opLhs")]),
+              ("$rhsShift", EOp nopos OToUInt32 [toNumber (EId nopos "$opRhs")])] $
+          ELet nopos [("$rhsShift2", EOp nopos OBAnd [EId nopos "$rhsShift", 
                                           --OToInteger is a technical
                                           --workaround to make sure we have
                                           --a plain integer in the Scheme
-                                          EOp OToInteger [ENumber 0x1F]])] $
-            (EOp eop [EId "$lhsShift", EId "$rhsShift2"])
+                                          EOp nopos OToInteger [ENumber nopos 0x1F]])] $
+            (EOp nopos eop [EId nopos "$lhsShift", EId nopos "$rhsShift2"])
     -- *, -, /, etc
     o eop = 
       binds e1 e2 $ 
-        ELet [("$opLhs2", toNumber (EId "$opLhs")),
-              ("$opRhs2", toNumber (EId "$opRhs"))] $
-          EOp eop [EId "$opLhs2", EId "$opRhs2"]
+        ELet nopos [("$opLhs2", toNumber (EId nopos "$opLhs")),
+              ("$opRhs2", toNumber (EId nopos "$opRhs"))] $
+          EOp nopos eop [EId nopos "$opLhs2", EId nopos "$opRhs2"]
     --alg 11.8.5
     lt e1 e2 = 
-      ELet [("$ltLhs", toPrimitive e1),
+      ELet nopos [("$ltLhs", toPrimitive e1),
             ("$ltRhs", toPrimitive e2)] $
-        EIf (eAnd (typeIs (EId "$ltLhs") "string")
-                  (typeIs (EId "$ltRhs") "string"))
-            (EOp OStrLt [EId "$ltLhs", EId "$ltRhs"])
-            (EOp OLt    [primToNum $ EId "$ltLhs", 
-                         primToNum $ EId "$ltRhs"])
+        EIf nopos (eAnd (typeIs (EId nopos "$ltLhs") "string")
+                  (typeIs (EId nopos "$ltRhs") "string"))
+            (EOp nopos OStrLt [EId nopos "$ltLhs", EId nopos "$ltRhs"])
+            (EOp nopos OLt    [primToNum $ EId nopos "$ltLhs", 
+                         primToNum $ EId nopos "$ltRhs"])
     --step 6 of <, >
     checkLtGt e =
-      ELet [("$res", e)] $
-        EIf (typeIs (EId "$res") "undefined")
-            (EBool False)
-            (EId "$res")
+      ELet nopos [("$res", e)] $
+        EIf nopos (typeIs (EId nopos "$res") "undefined")
+            (EBool nopos False)
+            (EId nopos "$res")
     --step 6 of <=, >= 
     checkLeqGeq e = 
-      ELet [("$res", e)] $
-        EIf (eOr (typeIs (EId "$res") "undefined")
-                 (EId "$res"))
-            (EBool False)
-            (EBool True)
+      ELet nopos [("$res", e)] $
+        EIf nopos (eOr (typeIs (EId nopos "$res") "undefined")
+                 (EId nopos "$res"))
+            (EBool nopos False)
+            (EBool nopos True)
     bitop eop = 
       binds e1 e2 $ 
-        ELet [("$bitLhs", EOp OToInt32 [toNumber (EId "$opLhs")]),
-              ("$bitRhs", EOp OToInt32 [toNumber (EId "$opRhs")])] $
-          EOp eop [EId "$bitLhs", EId "$bitRhs"]
+        ELet nopos [("$bitLhs", EOp nopos OToInt32 [toNumber (EId nopos "$opLhs")]),
+              ("$bitRhs", EOp nopos OToInt32 [toNumber (EId nopos "$opRhs")])] $
+          EOp nopos eop [EId nopos "$bitLhs", EId nopos "$bitRhs"]
                       
 
  
 
-prefixOp :: PrefixOp -> Expr -> Expr
+prefixOp :: PrefixOp -> ExprPos -> ExprPos
 prefixOp op e = case op of 
   -- It is strange that that the subterm of delete is an expression and not
   -- an l-value.  Note that that delete has no effect when its subexpression
   -- is not l-value like.
   PrefixDelete -> case e of
-    EGetField (EDeref eObj) eString ->
-      ELet [("$delObj", eObj),
+    EGetField a1 (EDeref a2 eObj) eString ->
+      ELet nopos [("$delObj", eObj),
             ("$delStr", eString)] $
-        EIf (EOp OObjCanDelete [EDeref $ EId "$delObj", EId "$delStr"])
-            (ESeq 
-              (ESetRef (EId "$delObj")
-                (EDeleteField (EDeref $ EId "$delObj") (EId "$delStr")))
-              (EBool True))
-            (EBool False)
-    otherwise -> EBool True
+        EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", EId nopos "$delStr"])
+            (ESeq nopos
+              (ESetRef nopos (EId nopos "$delObj")
+                (EDeleteField a1 (EDeref a2 $ EId nopos "$delObj") (EId nopos "$delStr")))
+              (EBool nopos True))
+            (EBool nopos False)
+    otherwise -> EBool nopos True
     
-  PrefixVoid -> ESeq (getValue e) EUndefined
+  PrefixVoid -> ESeq nopos (getValue e) (EUndefined nopos)
   --TODO: make sure step 3 in 11.4.3 makes sense for our typeof:
-  PrefixTypeof -> EOp OSurfaceTypeof [getValue e]
-  PrefixBNot -> EOp OBNot [EOp OToInt32 [toNumber e]]
+  PrefixTypeof -> EOp nopos OSurfaceTypeof [getValue e]
+  PrefixBNot -> EOp nopos OBNot [EOp nopos OToInt32 [toNumber e]]
   PrefixLNot -> eNot (toBoolean e)
   PrefixPlus -> toNumber e
-  PrefixMinus -> EOp OSub [ENumber 0.0, toNumber e]
+  PrefixMinus -> EOp nopos OSub [ENumber nopos 0.0, toNumber e]
 
 
 type Env = M.Map Ident Bool
@@ -392,66 +390,67 @@ type Env = M.Map Ident Bool
 
 --i swear this is what 15.4 says:
 isArrayIndex e = 
-  ELet [("$isai", e)] $
-    eAnd (isString (EId "$isai"))
-         (ELet [("$intai", EOp OToUInt32 [primToNum $ EId "$isai"])] $
-           (eAnd (eNot (eStxEq (EId "$intai") (ENumber 0xFFFFFFFF)))
-                 (eStxEq (primToStr (EId "$intai")) (EId "$isai"))))
+  ELet nopos [("$isai", e)] $
+    eAnd (isString (EId nopos "$isai"))
+         (ELet nopos [("$intai", EOp nopos OToUInt32 [primToNum $ EId nopos "$isai"])] $
+           (eAnd (eNot (eStxEq (EId nopos "$intai") (ENumber nopos 0xFFFFFFFF)))
+                 (eStxEq (primToStr (EId nopos "$intai")) (EId nopos "$isai"))))
 
 
 --helper since it's used in stmt too:
-eAssignLVar :: Env -> String -> Expr -> Expr
+eAssignLVar :: Env -> String -> ExprPos -> ExprPos
 eAssignLVar env x e = case M.lookup x env of
-  Just True -> ESetRef (EId x) e
-  Nothing -> ESetRef (EId "$global") 
-                     (EUpdateField (EDeref $ EId "$global")
-                                   (EString x)
+  Just True -> ESetRef nopos (EId nopos x) e
+  Nothing -> ESetRef nopos (EId nopos "$global") 
+                     (EUpdateField nopos (EDeref nopos $ EId nopos "$global")
+                                   (EString nopos x)
                                    e)
   Just False -> error "eAssignLVar: assigning a non-assignable variable"
 
-eVarRef :: Env -> String -> Expr
+eVarRef :: Env -> String -> ExprPos
 eVarRef env x = case M.lookup x env of
-  Just True -> EDeref (EId x)
-  Just False -> EId x
+  Just True -> EDeref nopos (EId nopos x)
+  Just False -> EId nopos x
   Nothing -> getGlobalVar x
 
 
 --takes our expressions, writes out a new
 --this takes in an arguments obj directly. used from String.split.
-eNewDirect :: Expr -> Expr -> Expr
+--TODO--sourcepos here?
+eNewDirect :: ExprPos -> ExprPos -> ExprPos
 eNewDirect eConstr argumentObj = 
-  ELet [("$constr", eConstr)] $
-    EIf (eNot $ isRefComb isFunctionObj (EId "$constr"))
-        (EThrow $ newError "TypeError" "new not given function") $
+  ELet nopos [("$constr", eConstr)] $
+    EIf nopos (eNot $ isRefComb isFunctionObj (EId nopos "$constr"))
+        (EThrow nopos $ newError "TypeError" "new not given function") $
         newWork eConstr argumentObj 
   where --newWork split up here so that we don't have infinite recursion
     newWork eConstr argumentObj = 
         --[[Construct]], 13.2.2 . it's always the same,
         --so no need to have it be a $constr field (like $call)
-         (ELet [("$protoField", 
-                EGetField (EDeref (EId "$constr")) (EString "prototype"))] $
-          ELet [("$protoObj",
-                 EIf (isRefComb isObject (EId "$protoField"))
-                     (EId "$protoField")
-                     (EId "$Object.prototype"))] $
-            ELet [("$newObj", 
-                   ERef $ EObject [("$constructing", EBool True),
-                                   ("$class", EString "Object"),
-                                   ("$proto", EId "$protoField")])] $
-              ELet1 (EApp (EGetField (EDeref (EId "$constr"))(EString "$code"))
-                         [EId "$newObj", argumentObj]) $ \newResult ->
-                EIf (isRefComb isObject (EId newResult))
-                    (EId newResult)
-                    (ESeq (ESetRef (EId "$newObj")
-                      (EDeleteField (EDeref $ EId "$newObj")
-                                    (EString "$constructing")))
-                      (EId "$newObj")))
+         (ELet nopos [("$protoField", 
+                EGetField nopos (EDeref nopos (EId nopos "$constr")) (EString nopos "prototype"))] $
+          ELet nopos [("$protoObj",
+                 EIf nopos (isRefComb isObject (EId nopos "$protoField"))
+                     (EId nopos "$protoField")
+                     (EId nopos "$Object.prototype"))] $
+            ELet nopos [("$newObj", 
+                   ERef nopos $ EObject nopos [("$constructing", EBool nopos True),
+                                   ("$class", EString nopos "Object"),
+                                   ("$proto", EId nopos "$protoField")])] $
+              ELet1 nopos (EApp nopos (EGetField nopos (EDeref nopos (EId nopos "$constr"))(EString nopos "$code"))
+                         [EId nopos "$newObj", argumentObj]) $ \newResult ->
+                EIf nopos (isRefComb isObject (EId nopos newResult))
+                    (EId nopos newResult)
+                    (ESeq nopos (ESetRef nopos (EId nopos "$newObj")
+                      (EDeleteField nopos (EDeref nopos $ EId nopos "$newObj")
+                                    (EString nopos "$constructing")))
+                      (EId nopos "$newObj")))
 
 --this is the traditional list of exprs one:
-eNew eConstr es = ELet1 eConstr $ \c ->
-  eNewDirect (EId c) (ERef $ ERef $ eArgumentsObj es (EId c))
+eNew eConstr es = ELet1 nopos eConstr $ \c ->
+  eNewDirect (EId nopos c) (ERef nopos $ ERef nopos $ eArgumentsObj es (EId nopos c))
 newError name msg = 
-  EApp (EId "$makeException") [EString name, EString (":" ++ msg)]
+  EApp nopos (EId nopos "$makeException") [EString nopos name, EString nopos (":" ++ msg)]
 
 
 
@@ -461,10 +460,10 @@ newError name msg =
 -- ForStmt _ init incr test body -> eFor (forInit env init) (maybeExpr env incr)
 --    (toBoolean $ maybeExpr env test) (stmt env body)  
 
-eFor init incr test body = ESeq init loop
- where loop = ELabel "$break" $
-                EWhile test (ESeq body' incr)
-       body' = ELabel "$continue" body
+eFor init incr test body = ESeq (label init) init loop
+ where loop = ELabel nopos "$break" $
+                EWhile (label test) test (ESeq (label body) body' incr)
+       body' = ELabel nopos "$continue" body
 
 
 
@@ -473,125 +472,125 @@ eFor init incr test body = ESeq init loop
 -- The setter manages various JavaScript details, including:
 -- 11.2.1 (eval LHS), 11.13.1 (assignop), 8.7.2 (putValue), and 
 -- 8.6.2.2 (Object put) and 15.4.5.1 (Array put).
-theSetter :: Ident -> Ident -> (Expr -> Expr)
-theSetter objRef fieldRef = \v -> ELet1 v $ \vId -> 
-  ESeq (EIf (eStxEq (EGetField (EDeref (EId objRef)) (EString "$class"))
-                    (EString "Array"))
-         (setArray objRef fieldRef (EId vId))
-         (setObj objRef fieldRef (EId vId)))
-       (EId vId)
+theSetter :: Ident -> Ident -> (ExprPos -> ExprPos)
+theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId -> 
+  ESeq nopos (EIf nopos (eStxEq (EGetField nopos (EDeref nopos (EId nopos objRef)) (EString nopos "$class"))
+                    (EString nopos "Array"))
+         (setArray objRef fieldRef (EId nopos vId))
+         (setObj objRef fieldRef (EId nopos vId)))
+       (EId nopos vId)
   where setObj objRef field v = 
-          ESetRef (EId objRef) 
-                  (EUpdateField (EDeref (EId objRef)) (EId field) v)
+          ESetRef nopos (EId nopos objRef) 
+                  (EUpdateField nopos (EDeref nopos (EId nopos objRef)) (EId nopos field) v)
         setArray objRef field v = 
           --15.4.5.1:
-          EIf (eStxEq (EId field) (EString "length"))
-              (EThrow (EString "setting .length of array NYI")) $
-              ELet1 (setObj objRef field v) $ \r ->
+          EIf nopos (eStxEq (EId nopos field) (EString nopos "length"))
+              (EThrow nopos (EString nopos "setting .length of array NYI")) $
+              ELet1 nopos (setObj objRef field v) $ \r ->
                  --steps 7-11
-               EIf (isArrayIndex (EId field))
-                  (ELet [("$aindx", primToNum $ EId field),
-                         ("$curln", EGetField (EDeref (EId objRef))
-                                              (EString "length"))] $
-                    EIf (EOp OLt [EId "$aindx", EId "$curln"])
-                       (EId r)
-                       (ESeq
-                          (ESetRef 
-                            (EId objRef)
-                            (EUpdateField (EDeref (EId objRef))
-                                          (EString "length")
-                                          (EOp ONumPlus [EId "$aindx",
-                                                         ENumber 1])))
-                          (EId r)))
-                  (EId r)
+               EIf nopos (isArrayIndex (EId nopos field))
+                  (ELet nopos [("$aindx", primToNum $ EId nopos field),
+                         ("$curln", EGetField nopos (EDeref nopos (EId nopos objRef))
+                                              (EString nopos "length"))] $
+                    EIf nopos (EOp nopos OLt [EId nopos "$aindx", EId nopos "$curln"])
+                       (EId nopos r)
+                       (ESeq nopos
+                          (ESetRef nopos 
+                            (EId nopos objRef)
+                            (EUpdateField nopos (EDeref nopos (EId nopos objRef))
+                                          (EString nopos "length")
+                                          (EOp nopos ONumPlus [EId nopos "$aindx",
+                                                         ENumber nopos 1])))
+                          (EId nopos r)))
+                  (EId nopos r)
 
 withLValue :: Env 
            -> LValue SourcePos  
-           -> (Expr -> (Expr -> Expr) ->  Expr) -- ^getter, setter
-           -> Expr
-withLValue env (LVar _ x) bodyFn = case M.lookup x env of
+           -> (ExprPos -> (ExprPos -> ExprPos) -> ExprPos) -- ^getter, setter
+           -> ExprPos
+withLValue env (LVar a x) bodyFn = case M.lookup x env of
   Just True -> 
-    bodyFn (EDeref (EId x)) 
-            (\v -> ESeq (ESetRef (EId x) v) (EDeref (EId x)))
+    bodyFn (EDeref nopos (EId a x)) 
+            (\v -> ESeq nopos (ESetRef nopos (EId nopos x) v) (EDeref nopos (EId nopos x)))
   Nothing ->
     bodyFn (getGlobalVar x) $ \v ->
-               EGetField 
-                 (EDeref
-                   (ESetRef (EId "$global")
-                            (EUpdateField (EDeref (EId "$global"))
-                                          (EString x) v)))
-                 (EString x)
+               EGetField nopos
+                 (EDeref nopos
+                   (ESetRef nopos (EId nopos "$global")
+                            (EUpdateField nopos (EDeref nopos (EId nopos "$global"))
+                                          (EString nopos x) v)))
+                 (EString nopos x)
   Just False -> error "withLValue applied to a non-assignable value"
-withLValue env (LDot _ e x) bodyFn =
-  ELet2 (expr env e) (EString x) $ \objRef field ->
-    bodyFn (EGetField (EDeref (EId objRef)) (EString x))
+withLValue env (LDot a e x) bodyFn =
+  ELet2 nopos (expr env e) (EString nopos x) $ \objRef field ->
+    bodyFn (EGetField a (EDeref nopos (EId nopos objRef)) (EString nopos x))
            (theSetter objRef field)
-withLValue env (LBracket _ e1 e2) bodyFn =
-  ELet2 (expr env e1) (toString (expr env e2)) $ \objRef field ->
-    bodyFn (EGetField (EDeref (EId objRef)) (EId field))
+withLValue env (LBracket a e1 e2) bodyFn =
+  ELet2 nopos (expr env e1) (toString (expr env e2)) $ \objRef field ->
+    bodyFn (EGetField a (EDeref nopos (EId nopos objRef)) (EId nopos field))
            (theSetter objRef field)
 
 
 
-expr :: Env -> Expression SourcePos -> Expr
+expr :: Env -> Expression SourcePos -> ExprPos
 expr env e = case e of
-  StringLit _ s -> EString s
-  RegexpLit p s glob ci -> 
-    eNew (EDeref $ EId "RegExp") [ --EId since we want the original one
-      EString s, EString ((if glob then "g" else "") ++
-                          (if ci   then "i" else ""))]
+  StringLit a s -> EString a s
+  RegexpLit a s glob ci -> 
+    eNew (EDeref a $ EId nopos "RegExp") [ --EId since we want the original one
+      EString nopos s, EString nopos ((if glob then "g" else "") ++
+                                (if ci   then "i" else ""))]
   --ArrayLit more or less follows 11.1.4 but does some things
   --more directly.
-  ArrayLit _ es -> 
-    ERef (EObject ([ ("$class", EString "Array")
-                   , ("$proto", EId "$Array.prototype")
-                   , ("length", ENumber (fromIntegral $ length es)) ]
-                   ++ 
-                   (map (\ix -> (show ix, expr env (es!!ix))) 
-                        [0..((length es)-1)])
-                   ))
-  NumLit _ n -> ENumber n
-  IntLit _ n -> ENumber (fromIntegral n)
-  BoolLit _ b -> EBool b
-  NullLit _ -> ENull
-  ObjectLit _ ps -> ERef $ EObject $ 
-    proto:("$class", EString "Object"):
+  ArrayLit a es -> 
+    ERef a (EObject nopos ([ ("$class", EString nopos "Array")
+                           , ("$proto", EId nopos "$Array.prototype")
+                           , ("length", ENumber nopos (fromIntegral $ length es)) ]
+                           ++ 
+                           (map (\ix -> (show ix, expr env (es!!ix))) 
+                                    [0..((length es)-1)])
+                          ))
+  NumLit a n -> ENumber a n
+  IntLit a n -> ENumber a (fromIntegral n)
+  BoolLit a b -> EBool a b
+  NullLit a -> ENull a
+  ObjectLit a ps -> ERef a $ EObject nopos $ 
+    proto:("$class", EString nopos"Object"):
       (map (\(p,e') -> (prop p, expr env e')) ps)
-      where proto = ("$proto", EId "$Object.prototype")
-  ThisRef _ -> EId "this" 
+      where proto = ("$proto", EId nopos "$Object.prototype")
+  ThisRef a -> EId a "this" 
   VarRef _ (Id _ s) -> eVarRef env s
   -- PrefixDelete assumes that DotRef and BracketRef are desugared to iimmediate
   -- EGetField expressions.
-  DotRef _ e (Id _ s) -> EGetField (EDeref $ toObject $ expr env e) 
-                                   (EString s)
-  BracketRef _ e1 e2 -> 
-    EGetField (EDeref $ toObject $ expr env e1) (toString $ expr env e2)
+  DotRef a1 e (Id a2 s) -> EGetField a1 (EDeref nopos $ toObject $ expr env e) 
+                           (EString a2 s)
+  BracketRef a e1 e2 -> 
+    EGetField a (EDeref nopos $ toObject $ expr env e1) (toString $ expr env e2)
   NewExpr _ eConstr es -> eNew (expr env eConstr) (map (expr env) es)
   PrefixExpr _ op e -> prefixOp op (expr env e)
-  UnaryAssignExpr _ op lv -> withLValue env lv $ \get setter -> case op of
-    PostfixInc -> ELet1 get $ \x -> 
-      ESeq (setter $ EOp ONumPlus [ENumber 1, toNumber (EId x)])
-           (EId x)
-    PostfixDec -> ELet1 get $ \x -> 
-      ESeq (setter $ EOp ONumPlus [toNumber (EId x), ENumber (-1)])
-           (EId x)
+  UnaryAssignExpr a op lv -> withLValue env lv $ \get setter -> case op of
+    PostfixInc -> ELet1 nopos get $ \x -> 
+      ESeq nopos (setter $ EOp a ONumPlus [ENumber nopos 1, toNumber (EId nopos x)])
+           (EId nopos x)
+    PostfixDec -> ELet1 nopos get $ \x -> 
+      ESeq nopos (setter $ EOp a ONumPlus [toNumber (EId nopos x), ENumber nopos (-1)])
+           (EId nopos x)
     PrefixInc -> 
-      ELet1 (EOp ONumPlus [toNumber get, ENumber 1]) $ \v -> setter (EId v)
+      ELet1 nopos (EOp a ONumPlus [toNumber get, ENumber nopos 1]) $ \v -> setter (EId nopos v)
     PrefixDec -> 
-      ELet1 (EOp ONumPlus [toNumber get, ENumber (-1)]) $ \v -> setter (EId v)
+      ELet1 nopos (EOp a ONumPlus [toNumber get, ENumber nopos (-1)]) $ \v -> setter (EId nopos v)
   -- typeof e === string-constant is a common pattern that we desugar to
   -- something simpler, when we aren't checking for "object" or "function".
-  InfixExpr _ OpStrictEq (PrefixExpr _ PrefixTypeof e) (StringLit _ s)
+  InfixExpr a1 OpStrictEq (PrefixExpr a2 PrefixTypeof e) (StringLit a3 s)
     | s /= "function" && s /= "object" ->
-    EOp OStrictEq [EOp OTypeof [expr env e], EString s]
+    EOp a1 OStrictEq [EOp a2 OTypeof [expr env e], EString a3 s]
   InfixExpr _ op e1 e2 -> infixOp op (expr env e1) (expr env e2)
-  CondExpr _ e1 e2 e3 -> EIf (toBoolean $ expr env e1) 
+  CondExpr a e1 e2 e3 -> EIf a (toBoolean $ expr env e1) 
                              (expr env e2) (expr env e3)
   AssignExpr _ OpAssign lv e -> withLValue env lv $ \get setter ->
     setter (expr env e)
   --assuming that 'get' has no side effects, which withLValue should 
   --guarantee
-  AssignExpr p op lv e -> withLValue env lv $ \get setter ->
+  AssignExpr a op lv e -> withLValue env lv $ \get setter ->
     setter (infixOp iOp get (expr env e))
    where
     iOp = case op of
@@ -610,45 +609,45 @@ expr env e = case e of
   ParenExpr _ e1 -> expr env e1
   ListExpr _ [] -> error "Desugar.hs: expr got empty ListExpr"
   ListExpr _ [e'] -> expr env e'
-  ListExpr a (e':es) -> ESeq (expr env e') (expr env (ListExpr a es))
-  CallExpr _ (DotRef _ obj (Id _ method)) args ->
-    ELet [("$obj", toObject $ expr env obj)] $
-      applyObj (EGetField (EDeref $ EId "$obj") (EString method)) (EId "$obj")
+  ListExpr a (e':es) -> ESeq a (expr env e') (expr env (ListExpr a es))
+  CallExpr a1 (DotRef a2 obj (Id a3 method)) args ->
+    ELet nopos [("$obj", toObject $ expr env obj)] $
+      applyObj (EGetField a1 (EDeref a2 $ EId nopos "$obj") (EString a3 method)) (EId nopos "$obj")
                (map (expr env) args)          
-  CallExpr _ e es -> 
-    ELet [("$obj", expr env e)] $
-      EIf (eNot (isRefComb isFunctionObj (EId "$obj")))
-          (EThrow $ newError "TypeError" "CallExpr given non-function")
-          (applyObj (EId "$obj") (EId "$global") (map (expr env) es))
+  CallExpr a e es -> 
+    ELet nopos [("$obj", expr env e)] $
+      EIf a (eNot (isRefComb isFunctionObj (EId nopos "$obj")))
+          (EThrow nopos $ newError "TypeError" "CallExpr given non-function")
+          (applyObj (EId nopos "$obj") (EId nopos "$global") (map (expr env) es))
   --TODO: don't just ignore mname                            
-  FuncExpr p mname ids unliftedStmt -> 
-    ERef $ EObject [("$code", code), 
-                    ("arguments", arguments),
-                    ("prototype", prototype),
-                    ("$strRep", EString strRep),
-                    ("$proto", EId "$Function.prototype")]
-      where s = BlockStmt p (liftFuncStmts [unliftedStmt])
+  FuncExpr a mname ids unliftedStmt -> 
+    ERef a $ EObject nopos [("$code", code), 
+                            ("arguments", arguments),
+                            ("prototype", prototype),
+                            ("$strRep", EString nopos strRep),
+                            ("$proto", EId nopos "$Function.prototype")]
+      where s = BlockStmt a (liftFuncStmts [unliftedStmt])
             arg x ix = case x `S.member` assignableArgs of
-              True -> ERef $ EGetField (EDeref $ EDeref (EId "arguments"))
-                                       (EString $ show ix)
-              False -> EGetField (EDeref $ EDeref (EId "arguments"))
-                                 (EString $ show ix)
+              True -> ERef a $ EGetField nopos (EDeref nopos $ EDeref nopos (EId nopos "arguments"))
+                                       (EString nopos $ show ix)
+              False -> EGetField a (EDeref nopos $ EDeref nopos (EId nopos "arguments"))
+                                 (EString nopos $ show ix)
             --cascade the lets in formals so that the rightmost one
             --is the one remaining
             --
             formals' = map (\(x, ix) -> (unId x, arg (unId x) ix)) 
                            (zip ids [0..])
             formals rest = foldr f rest formals'
-            f bind rest = ELet [bind] rest
-            code = ELambda ["this", "arguments"] $ 
+            f bind rest = ELet nopos [bind] rest
+            code = ELambda nopos ["this", "arguments"] $ 
                      formals $ 
-                     ELet locals $
-                       ELabel "$return" (stmt env' s)
-            prototype = ERef $ EObject [("$proto", EId "$Object.prototype"),
-                                        ("$class", EString "Object")]
-            arguments = ENull
+                     ELet nopos locals $
+                       ELabel nopos "$return" (stmt env' s)
+            prototype = ERef nopos $ EObject nopos [("$proto", EId nopos "$Object.prototype"),
+                                        ("$class", EString nopos "Object")]
+            arguments = ENull nopos
             vars = localVars s
-            locals = map (\x -> (x, ERef EUndefined)) vars
+            locals = map (\x -> (x, (ERef nopos) (EUndefined nopos))) vars
             argSet = S.fromList (map unId ids)
             assignable = assignableVars unliftedStmt
             assignableArgs = argSet `S.intersection` assignable
@@ -665,151 +664,152 @@ expr env e = case e of
             strArgs = concat $ intersperse "," (map unId ids)
 
 
-maybeExpr :: Env -> Maybe (Expression SourcePos) -> Expr
-maybeExpr _ Nothing = EUndefined
+maybeExpr :: Env -> Maybe (Expression SourcePos) -> ExprPos
+maybeExpr _ Nothing = EUndefined nopos
 maybeExpr env (Just e) = expr env e
 
 --{var x = 20; var x;} should have x be 20.
-varDecl :: Env -> VarDecl SourcePos -> Expr
-varDecl env (VarDecl p (Id _ x) rhs) = case M.lookup x env of
+varDecl :: Env -> VarDecl SourcePos -> ExprPos
+varDecl env (VarDecl a1 (Id a2 x) rhs) = case M.lookup x env of
     --True: it's a local var. if no declaration, don't do anything.
-    Just True -> if (isNothing rhs) then EUndefined else ESetRef (EId x) e
+    Just True -> if (isNothing rhs) then EUndefined a1 else ESetRef a1 (EId a2 x) e
     -- It's global. if it exists, do nothing, else set to undefined.
     Nothing -> 
       if (isNothing rhs)
-        then EIf (EOp OHasOwnProp [EDeref $ EId "$global", EString x])
-                 EUndefined setglob
+        then EIf nopos (EOp nopos OHasOwnProp [EDeref nopos $ EId nopos "$global", EString a2 x])
+                 (EUndefined nopos) setglob
         else setglob
     Just False -> error "varDecl of a non-assignable variable"
                  
   where e = case rhs of
-              Nothing -> EUndefined
+              Nothing -> EUndefined nopos
               Just e' -> expr env e'                                   
-        setglob = ESetRef (EId "$global") 
-                   (EUpdateField (EDeref $ EId "$global")
-                                 (EString x) e)
+        setglob = ESetRef nopos (EId nopos "$global") 
+                   (EUpdateField a1 (EDeref nopos $ EId nopos "$global")
+                                 (EString a2 x) e)
 
 
-forInit :: Env -> ForInit SourcePos -> Expr
-forInit _ NoInit = EUndefined
-forInit env (VarInit decls) = foldr ESeq EUndefined (map (varDecl env) decls)
+forInit :: Env -> ForInit SourcePos -> ExprPos
+forInit _ NoInit = EUndefined nopos
+forInit env (VarInit decls) = foldr (ESeq nopos) (EUndefined nopos) (map (varDecl env) decls)
 forInit env (ExprInit e) = expr env e
 
 
-catchClause :: Env -> CatchClause SourcePos -> Expr
-catchClause env (CatchClause _ (Id _ x) s) = ELambda [x] $
-  ELet [(x, ERef (EId x))] (stmt env' s)
+catchClause :: Env -> CatchClause SourcePos -> ExprPos
+catchClause env (CatchClause a1 (Id a2 x) s) = ELambda nopos [x] $
+  ELet a1 [(x, ERef nopos (EId a2 x))] (stmt env' s)
   where env' = M.insert x True env
 
 
-caseClauses :: Ident -> Ident -> Env -> CaseClause SourcePos -> Expr -> Expr
-caseClauses testId caseId env (CaseClause _ e ss) remainingCases = 
-  ELet [(testId, EIf (EId testId)
-                      (EBool True) 
-                      (EOp OStrictEq [EId caseId, expr env e]))] $
-    ESeq
-      (EIf (EId testId)
-           (foldr (\s e -> ESeq (stmt env s) e) EUndefined ss)
-           EUndefined)
+--The source position goes on the ESeq for both default and normal cases
+caseClauses :: Ident -> Ident -> Env -> CaseClause SourcePos -> ExprPos -> ExprPos
+caseClauses testId caseId env (CaseClause a e ss) remainingCases = 
+  ELet nopos [(testId, EIf nopos (EId nopos testId)
+                      (EBool nopos True) 
+                      (EOp nopos OStrictEq [EId nopos caseId, expr env e]))] $
+    ESeq a
+      (EIf nopos (EId nopos testId)
+           (foldr (\s e -> ESeq nopos (stmt env s) e) (EUndefined nopos) ss)
+           (EUndefined nopos))
       remainingCases
-caseClauses _ _ env (CaseDefault _ ss) innerExpr =
-   foldr (\s e -> ESeq (stmt env s) e) innerExpr ss
+caseClauses _ _ env (CaseDefault a ss) innerExpr =
+   foldr (\s e -> ESeq a (stmt env s) e) innerExpr ss
 
 
-stmt :: Env -> Statement SourcePos -> Expr
+stmt :: Env -> Statement SourcePos -> ExprPos
 stmt env s = case s of
-  BlockStmt _ [] -> EUndefined
-  BlockStmt a (s:ss) -> ESeq (stmt env s) (stmt env (BlockStmt a ss))
-  EmptyStmt _ -> EUndefined
+  BlockStmt a [] -> EUndefined a
+  BlockStmt a (s:ss) -> ESeq a (stmt env s) (stmt env (BlockStmt a ss))
+  EmptyStmt a -> EUndefined a
   ExprStmt _ e -> expr env e
-  IfStmt _ e s1 s2 -> case boolExpr e of
-    True -> EIf (expr env e) (stmt env s1) (stmt env s2)
-    False -> EIf (toBoolean $ expr env e) (stmt env s1) (stmt env s2)
-  IfSingleStmt _ e s1 -> EIf (toBoolean $ expr env e) 
-                             (stmt env s1)
-                             EUndefined
-  WhileStmt _ e1 s1 -> 
-    ELabel "$break" $
-      EWhile (toBoolean $ expr env e1) $
-        ELabel "$continue" 
+  IfStmt a e s1 s2 -> case boolExpr e of
+    True -> EIf a (expr env e) (stmt env s1) (stmt env s2)
+    False -> EIf a (toBoolean $ expr env e) (stmt env s1) (stmt env s2)
+  IfSingleStmt a e s1 -> EIf a (toBoolean $ expr env e) 
+                         (stmt env s1)
+                         (EUndefined nopos)
+  WhileStmt a e1 s1 -> 
+    ELabel nopos "$break" $
+      EWhile a (toBoolean $ expr env e1) $
+        ELabel nopos "$continue" 
           (stmt env s1)
   ForStmt _ init test incr body -> 
     eFor (forInit env init) (maybeExpr env incr)
          (toBoolean $ maybeExpr env test) (stmt env body)
-  ThrowStmt _ e -> EThrow (expr env e)
-  TryStmt _ body catches finally -> 
-    EFinally withoutFinally (maybeStmt env finally)
-      where withoutFinally = 
-              foldl (\body catch -> ECatch body (catchClause env catch)) 
-                    (stmt env body)
-                    catches
-  BreakStmt _ Nothing -> EBreak "$break" EUndefined
-  BreakStmt _ (Just (Id _ lbl)) -> EBreak lbl EUndefined
-  ContinueStmt _ Nothing -> EBreak "$continue" EUndefined
-  ContinueStmt _ (Just (Id _ lbl)) -> EBreak lbl EUndefined
-  LabelledStmt _ (Id _ lbl) s1 -> ELabel lbl (stmt env s1)
-  ReturnStmt _ Nothing -> EBreak "$return" EUndefined
-  ReturnStmt _ (Just e) -> EBreak "$return" (expr env e)
-  VarDeclStmt _ decls -> foldr ESeq EUndefined (map (varDecl env) decls)
+  ThrowStmt a e -> EThrow a (expr env e)
+  TryStmt a body catches finally -> -- TODO:  Not sure what gets nopos here
+      EFinally a withoutFinally (maybeStmt env finally)
+          where withoutFinally = 
+                    foldl (\body catch -> ECatch nopos body (catchClause env catch)) 
+                              (stmt env body)
+                              catches
+  BreakStmt a Nothing -> EBreak a "$break" (EUndefined nopos)
+  BreakStmt a (Just (Id _ lbl)) -> EBreak a lbl (EUndefined nopos)
+  ContinueStmt a Nothing -> EBreak a "$continue" (EUndefined nopos)
+  ContinueStmt a (Just (Id _ lbl)) -> EBreak a lbl (EUndefined nopos)
+  LabelledStmt a (Id _ lbl) s1 -> ELabel a lbl (stmt env s1)
+  ReturnStmt a Nothing -> EBreak a "$return" (EUndefined nopos)
+  ReturnStmt a (Just e) -> EBreak a "$return" (expr env e)
+  VarDeclStmt a decls -> foldr (ESeq nopos) (EUndefined nopos) (map (varDecl env) decls)
   FunctionStmt p _ _ _ -> 
     error $ "Desugar.hs : expected FunctionStmt at " ++ show p
   WithStmt _ obj body -> desugarWith (toObject $ expr env obj) (stmt env body)
-  ForInStmt _ (ForInVar (Id p x)) e s -> forin p x e s
-  ForInStmt _ (ForInNoVar (Id p x)) e s -> forin p x e s
+  ForInStmt a (ForInVar (Id p x)) e s -> forin a p x e s
+  ForInStmt a (ForInNoVar (Id p x)) e s -> forin a p x e s
   DoWhileStmt _ _ _ -> nyi "DoWhileStmt"
-  SwitchStmt p e cases ->
-    ELet1 (expr env e) $ \caseId ->
-      ELabel "$break" $
-        ELet1 (EBool False) $ \testId ->
-        foldr (caseClauses testId caseId env) EUndefined cases
+  SwitchStmt a e cases ->
+    ELet1 a (expr env e) $ \caseId ->
+      ELabel nopos "$break" $
+        ELet1 nopos (EBool nopos False) $ \testId ->
+        foldr (caseClauses testId caseId env) (EUndefined nopos) cases
  where
   nyi s = error $ "Desugar.hs: " ++ s
   --TODO eventually: fix to work with any lhs
-  forin p x eObj body = 
-    ELet [("$_finObj", expr env eObj),
-          ("$finIter", ERef $ EUndefined)] $ --internal iterator
+  forin a p x eObj body = --TODO: where does a go?
+    ELet a [("$_finObj", expr env eObj),
+            ("$finIter", ERef nopos $ EUndefined nopos)] $ --internal iterator
       --ECMA-breaking change: iterating thru undefined doesn't throw typeerr
-      EIf (eOr (isUndefined (EId "$_finObj"))
-               (eStxEq (EId "$_finObj") ENull))
-          EUndefined $
-          restfin p x body
-  restfin p x body =    
-    ELet [("$finObj", toObject $ EId "$_finObj")] $
-      ELabel "$break" $
+      EIf nopos (eOr (isUndefined (EId nopos "$_finObj"))
+                 (eStxEq (EId nopos "$_finObj") (ENull nopos)))
+          (EUndefined nopos) $
+          restfin a p x body
+  restfin a p x body =    
+    ELet nopos [("$finObj", toObject $ EId nopos "$_finObj")] $
+      ELabel nopos "$break" $
         --while there is a next:
-        EWhile (EOp OObjIterHasNext [EDeref $ EId "$finObj", 
-                                     EDeref $ EId "$finIter"]) $
-          (ELabel "$continue" $
+        EWhile nopos (EOp nopos OObjIterHasNext [EDeref nopos $ EId nopos "$finObj", 
+                                     EDeref nopos $ EId nopos "$finIter"]) $
+          (ELabel nopos "$continue" $
              --update our iterator
-             ESeq (ESetRef (EId "$finIter")
-                           (EOp OObjIterNext [EDeref $ EId "$finObj",
-                                              EDeref $ EId "$finIter"]))$
+             ESeq nopos (ESetRef nopos (EId nopos "$finIter")
+                           (EOp nopos OObjIterNext [EDeref nopos $ EId nopos "$finObj",
+                                              EDeref nopos $ EId nopos "$finIter"]))$
                --get the value into the lvar and eval the body
-               ELet [("$curval", (EOp OObjIterKey [EDeref $ EId "$finObj", 
-                                        EDeref$EId"$finIter"]))] $
+               ELet nopos [("$curval", (EOp nopos OObjIterKey [EDeref nopos $ EId nopos "$finObj", 
+                                        EDeref nopos $ EId nopos "$finIter"]))] $
                  --faking DontEnum: dont enum $ properties.
-                 EIf (EOp OStrStartsWith [EId "$curval", EString "$"])
-                     EUndefined
-                     (ESeq (eAssignLVar env x (EId "$curval"))
-                           (stmt env body)))
+                 EIf nopos (EOp nopos OStrStartsWith [EId nopos "$curval", EString nopos "$"])
+                     (EUndefined nopos)
+                     (ESeq nopos (eAssignLVar env x (EId nopos "$curval"))
+                               (stmt env body)))
           --if someone continues, it'll go into the while, and the
           --right thing should happen.
 
 
-maybeStmt :: Env -> Maybe (Statement SourcePos) -> Expr
-maybeStmt _ Nothing = EUndefined
+maybeStmt :: Env -> Maybe (Statement SourcePos) -> ExprPos
+maybeStmt _ Nothing = EUndefined nopos
 maybeStmt env (Just s) = stmt env s
 
 
-desugarExpr :: Expression SourcePos -> (Expr -> Expr) -> Expr
+desugarExpr :: Expression SourcePos -> (ExprPos -> ExprPos) -> ExprPos
 desugarExpr e env = env (expr M.empty e)
 
 
-desugarStmt :: Statement SourcePos -> (Expr -> Expr) -> Expr
+desugarStmt :: Statement SourcePos -> (ExprPos -> ExprPos) -> ExprPos
 desugarStmt s env = env (stmt M.empty s)
 
 
-desugarExprSetenv :: Expression SourcePos -> Env -> Expr
+desugarExprSetenv :: Expression SourcePos -> Env -> ExprPos
 desugarExprSetenv e env = expr env e
 
 
@@ -817,12 +817,12 @@ desugarExprSetenv e env = expr env e
 -- producing EUndefined, the result of the sequence of statements is the
 -- 'result' parameter.
 desugarStmtsWithResult :: [Statement SourcePos] 
-                       -> (Expr -> Expr) -> Expr -> Expr
+                       -> (ExprPos -> ExprPos) -> ExprPos -> ExprPos
 desugarStmtsWithResult stmts env result = 
-  env $ foldr ESeq result (map (stmt M.empty) stmts')
+  env $ foldr (ESeq nopos) result (map (stmt M.empty) stmts')
           where stmts' = liftFuncStmts stmts
 
 
-desugar :: JavaScript SourcePos -> (Expr -> Expr) -> Expr
+desugar :: JavaScript SourcePos -> (ExprPos -> ExprPos) -> ExprPos
 desugar (Script _ ss) env = 
-  desugarStmtsWithResult ss env EUndefined
+  desugarStmtsWithResult ss env (EUndefined nopos)

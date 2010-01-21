@@ -36,74 +36,74 @@ type Env = S.Set Ident
 
 -- |We first desugar, then desugar @with@, since desugared ASTs are simpler.
 -- 
-expr :: Ident -> Env -> Expr -> Expr
+expr :: Ident -> Env -> Expr a -> Expr a
 expr wId env e = case e of
-  ENumber _ -> e
-  EString _ -> e
-  EBool _ -> e
-  EUndefined -> e
-  ENull -> e
-  ELambda args e -> ELambda args (expr wId env' e)
+  ENumber a _ -> e
+  EString a _ -> e
+  EBool a _ -> e
+  EUndefined a -> e
+  ENull a -> e
+  ELambda a args e -> ELambda a args (expr wId env' e)
     where env' = (S.fromList args) `S.union` env
-  EObject binds -> EObject (map f binds)
+  EObject a binds -> EObject a (map f binds)
     where f (x, e2) = (x, expr wId env e2)
-  EGetField (EDeref (EId "$global")) (EString x) ->
-    EIf (EOp OHasOwnProp [EDeref $ EId wId, EString x])
-        (EGetField (EDeref $ EId wId) (EString x))
+  EGetField a1 (EDeref a2 (EId a3 "$global")) (EString a4 x) ->
+    EIf a1 (EOp a1 OHasOwnProp [EDeref a1 $ EId a1 wId, EString a4 x])
+        (EGetField a1 (EDeref a1 $ EId a1 wId) (EString a4 x))
         -- Preserve the $global["x"], so that an outer with can macro-expand
         -- the same way.
-        (EGetField (EDeref (EId "$global")) (EString x))
-  EDeref (EId x) -> case x `S.member` env of
+        (EGetField a1 (EDeref a1 (EId a1 "$global")) (EString a4 x))
+  EDeref a1 (EId a2 x) -> case x `S.member` env of
     True -> e
-    False -> EIf (EOp OHasOwnProp [EDeref $ EId wId, EString x])
+    False -> EIf a1 (EOp a1 OHasOwnProp [EDeref a1 $ EId a2 wId, EString a2 x])
                  -- We're re
-                 (EGetField (EDeref $ EId wId) (EString x))
-                 (EDeref $ EId x)
-  EId x -> e
-  EOp op es -> EOp op (map (expr wId env) es)
-  EApp e es -> EApp (expr wId env e) (map (expr wId env) es)
-  ELet binds body -> ELet (map f binds) (expr wId env' body)
+                 (EGetField a1 (EDeref a1 $ EId a2 wId) (EString a2 x))
+                 (EDeref a1 $ EId a2 x)
+  EId a x -> e
+  EOp a op es -> EOp a op (map (expr wId env) es)
+  EApp a e es -> EApp a (expr wId env e) (map (expr wId env) es)
+  ELet a binds body -> ELet a (map f binds) (expr wId env' body)
     where f (x, e') = (x, expr wId env e')
           env' = (S.fromList (map fst binds)) `S.union` env
-  ELet1 e1 f -> ELet1 (expr wId env e1) $ \x -> expr wId (S.insert x env) (f x)
-  ELet2 e1 e2 f -> 
-    ELet2 (expr wId env e1) (expr wId env e2) $ \x y -> 
+  ELet1 a e1 f -> ELet1 a (expr wId env e1) $ \x -> expr wId (S.insert x env) (f x)
+  ELet2 a e1 e2 f -> 
+    ELet2 a (expr wId env e1) (expr wId env e2) $ \x y -> 
       expr wId (S.insert y (S.insert x env)) (f x y)
-  ESetRef (EId "$global") 
-          (EUpdateField (EDeref (EId "$global")) (EString x) e) ->
-    EIf (EOp OHasOwnProp [EDeref $ EId wId, EString x])
-        (ESetRef (EId wId) 
-                 (EUpdateField (EDeref (EId wId)) (EString x) (expr wId env e)))
+  ESetRef a1 (EId a2 "$global") 
+          (EUpdateField a3 (EDeref a4 (EId a5 "$global")) (EString a6 x) e) ->
+    EIf a1 (EOp a3 OHasOwnProp [EDeref a4 $ EId a5 wId, EString a6 x])
+        (ESetRef a3 (EId a5 wId) 
+                     (EUpdateField a3 (EDeref a4 (EId a5 wId)) (EString a6 x) (expr wId env e)))
         -- Preserve the $global[x] = e, so that an outer with can macro-expand
         -- the same way.
-        (ESetRef (EId "$global") 
-                 (EUpdateField (EDeref (EId "$global")) 
-                               (EString x) 
-                               (expr wId env e)))
-  ESetRef (EId x) rhs -> case x `S.member` env of
+        (ESetRef a3 (EId a5 "$global") 
+                     (EUpdateField a3 (EDeref a4 (EId a5 "$global")) 
+                                       (EString a6 x) 
+                                       (expr wId env e)))
+  ESetRef a1 (EId a2 x) rhs -> case x `S.member` env of
     True -> e
-    False -> EIf (EOp OHasOwnProp [EDeref $ EId wId, EString x])
-     (ESetRef (EId wId) (EUpdateField (EDeref $ EId wId) (EString x) 
+    False -> EIf a1 (EOp a1 OHasOwnProp [EDeref a1 $ EId a2 wId, EString a2 x])
+     (ESetRef a1 (EId a2 wId) (EUpdateField a1 (EDeref a1 $ EId a2 wId) (EString a2 x) 
                                       (expr wId env rhs)))
-     (ESetRef (EId x) (expr wId env rhs))
-  ESetRef e1 e2 -> ESetRef (expr wId env e1) (expr wId env e2)
-  ERef e1 -> ERef (expr wId env e1)
-  EDeref e1 -> EDeref (expr wId env e1)
-  EGetField e1 e2 -> EGetField (expr wId env e1) (expr wId env e2)
-  EUpdateField e1 e2 e3 ->
-    EUpdateField (expr wId env e1) (expr wId env e2) (expr wId env e3)
-  ESeq e1 e2 -> ESeq (expr wId env e1) (expr wId env e2)
-  EIf e1 e2 e3 -> EIf (expr wId env e1) (expr wId env e2) (expr wId env e3)
-  EWhile e1 e2 -> EWhile (expr wId env e1) (expr wId env e2)
-  ELabel lbl e1 -> ELabel lbl (expr wId env e1)
-  EBreak lbl e1 -> EBreak lbl (expr wId env e1)
-  EThrow e1 -> EThrow (expr wId env e1)
-  ECatch e1 e2 -> ECatch (expr wId env e1) (expr wId env e2)
-  EFinally e1 e2 -> EFinally (expr wId env e1) (expr wId env e2)
-  EDeleteField e1 e2 -> EDeleteField (expr wId env e1) (expr wId env e2)
-  EEval -> e
+     (ESetRef a1 (EId a2 x) (expr wId env rhs))
+  ESetRef a e1 e2 -> ESetRef a (expr wId env e1) (expr wId env e2)
+  ERef a e1 -> ERef a (expr wId env e1)
+  EDeref a e1 -> EDeref a (expr wId env e1)
+  EGetField a e1 e2 -> EGetField a (expr wId env e1) (expr wId env e2)
+  EUpdateField a e1 e2 e3 ->
+    EUpdateField a (expr wId env e1) (expr wId env e2) (expr wId env e3)
+  ESeq a e1 e2 -> ESeq a (expr wId env e1) (expr wId env e2)
+  EIf a e1 e2 e3 -> EIf a (expr wId env e1) (expr wId env e2) (expr wId env e3)
+  EWhile a e1 e2 -> EWhile a (expr wId env e1) (expr wId env e2)
+  ELabel a lbl e1 -> ELabel a lbl (expr wId env e1)
+  EBreak a lbl e1 -> EBreak a lbl (expr wId env e1)
+  EThrow a e1 -> EThrow a (expr wId env e1)
+  ECatch a e1 e2 -> ECatch a (expr wId env e1) (expr wId env e2)
+  EFinally a e1 e2 -> EFinally a (expr wId env e1) (expr wId env e2)
+  EDeleteField a e1 e2 -> EDeleteField a (expr wId env e1) (expr wId env e2)
+  EEval a -> e
 
-desugarWith :: Expr -- ^arbitrary object added to the \"scope chain\"
-            -> Expr 
-            -> Expr
-desugarWith obj body = ELet1 obj $ \wId -> expr wId S.empty body
+desugarWith :: Expr SourcePos -- ^arbitrary object added to the \"scope chain\"
+            -> Expr SourcePos
+            -> Expr SourcePos
+desugarWith obj body = ELet1 nopos obj $ \wId -> expr wId S.empty body
