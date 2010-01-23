@@ -756,7 +756,13 @@ stmt env s = case s of
   WithStmt _ obj body -> desugarWith (toObject $ expr env obj) (stmt env body)
   ForInStmt a (ForInVar (Id p x)) e s -> forin a p x e s
   ForInStmt a (ForInNoVar (Id p x)) e s -> forin a p x e s
-  DoWhileStmt _ _ _ -> nyi "DoWhileStmt"
+  DoWhileStmt a s e ->
+    let s' = stmt env s
+        e' = expr env e
+      in ELet nopos [("$doTest", ERef nopos $ EBool nopos True)]
+              (EWhile a (eOr (EDeref nopos $ EId nopos "$doTest") e')
+                        (ESeq nopos s' (ESetRef nopos (EId nopos "$doTest")
+                                                      (EBool nopos False))))
   SwitchStmt a e cases ->
     ELet1 a (expr env e) $ \caseId ->
       ELabel nopos "$break" $
