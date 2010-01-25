@@ -21,12 +21,12 @@ Library
     mtl >= 1.1.0.1,
     containers >= 0.1,
     syb >= 0.1,
-    WebBits >= 2.0,
+    WebBits >= 2.1,
     LambdaJS >= 1.0
   ghc-options:
     -fwarn-incomplete-patterns
   Extensions:     
-    Generics DeriveDataTypeable ScopedTypeVariables
+    Generics DeriveDataTypeable ScopedTypeVariables FlexibleInstances
   Exposed-Modules:
     BrownPLT.JavaScript.ADsafe.Transformation
 
@@ -39,9 +39,9 @@ Executable adsafe
     mtl >= 1.1.0.1,
     containers >= 0.1,
     syb >= 0.1,
-    WebBits >= 2.0,
+    WebBits >= 2.1,
     LambdaJS >= 1.0
   ghc-options:
     -fwarn-incomplete-patterns
   Extensions:     
-    Generics DeriveDataTypeable ScopedTypeVariables
+    Generics DeriveDataTypeable ScopedTypeVariables FlexibleInstances
