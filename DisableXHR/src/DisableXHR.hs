@@ -36,7 +36,7 @@ instance Monad (Either String) where
 typeCheck :: Env -> ExprPos -> Either String T
 typeCheck env e = case e of
    ENumber _ _ -> return TSafe
-   EString _ "constructor" -> return JS
+   EString _ "XMLHttpRequest" -> return JS
    EString _ _ -> return TSafe
    EUndefined _ -> return TSafe
    EBool _ _ -> return TSafe
