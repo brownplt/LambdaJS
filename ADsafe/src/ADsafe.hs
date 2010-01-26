@@ -1,14 +1,19 @@
 module Main ( main ) where
 
+import Data.Map ( Map )
+import qualified Data.Map as M
+
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
 
 import BrownPLT.JavaScript.ADsafe.Transformation
+import BrownPLT.JavaScript.ADsafe.DisableBanned
 import BrownPLT.JavaScript.Parser ( parseScriptFromString )
 import BrownPLT.JavaScript.Semantics.Desugar ( desugar )
 import BrownPLT.JavaScript.Semantics.ECMAEnvironment ( ecma262Env )
 import BrownPLT.JavaScript.Semantics.PrettyPrint ( pretty )
+import BrownPLT.JavaScript.Semantics.Syntax
 
 
 
@@ -19,12 +24,27 @@ desugarMain opts = do
               otherwise -> fail "spurious command-line arguments"
   str <- getContents
   case parseScriptFromString "<stdin>" str of
+    Right script -> 
+      let core = adsafeDesugar script env
+        in do putStrLn (pretty core)
+              exitSuccess
+    Left err -> do
+      putStrLn (show err)
+      exitFailure
+
+adsafeDesugar script env =
+  let core1 = desugar script env
+      core2 = flattenSeqs core1
+      core3 = rewriteErrors core2
+    in core3
+
+typeCheckMain opts = do
+  str <- getContents
+  case parseScriptFromString "<stdin>" str of
     Right script -> do
-      let core1 = desugar script env
-          core2 = flattenSeqs core1
-          core3 = rewriteErrors core2
-      putStrLn (pretty core3)
-      exitSuccess
+      let core = adsafeDesugar script id
+        in do
+          putStrLn $ show $ isTypeable core
     Left err -> do
       putStrLn (show err)
       exitFailure
@@ -37,6 +57,7 @@ options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
   , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
+  , Option [] ["type-check"] (NoArg (Action typeCheckMain)) "typecheck ADsafe code"
   ]
 
 main :: IO ()

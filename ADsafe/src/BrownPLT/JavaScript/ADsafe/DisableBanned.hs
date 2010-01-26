@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.ADsafe.DisableBanned ( typeCheck ) where
+module BrownPLT.JavaScript.ADsafe.DisableBanned ( isTypeable, rejectCondition ) where
 
 import Data.Map ( Map )
 import qualified Data.Map as M
@@ -22,11 +22,12 @@ subType SafeString Safe = True
 subType SafeString JS = True
 subType _ _ = False
 
-
-superType t1 t2 = case t1 `compare` t2 of
-  LT -> t2
-  GT -> t1
-  EQ -> t1
+superType :: T -> T -> T
+superType t1 t2 =
+  case t1 `compare` t2 of
+    LT -> t2
+    GT -> t1
+    EQ -> t1
 
 instance Monad (Either String) where
   return x = Right x
@@ -89,11 +90,27 @@ typeCheck env e = case e of
    EOp _ _ es -> do
      ts <- mapM (typeCheck env) es
      return JS
-   EIf _ e1 e2 e3 -> do
-     t1 <- typeCheck env e1
-     t2 <- typeCheck env e2
-     t3 <- typeCheck env e3
-     return (superType t2 t3)
+   EIf _ (EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "location"]) e2 e3
+     | M.lookup x env == Just SafeString  ->
+     typeCheck env e3
+   EIf _ (EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "string"]) e2 e3 
+     | M.lookup x env == Just Safe -> do
+    t2 <- typeCheck (M.insert x SafeString env) e2
+    t3 <- typeCheck env e3
+    return (superType t2 t3)
+   EIf _ c e1 e2 ->
+     case rejectCondition c of
+       Just (c1, object, name) -> do
+         -- object and name are strings taken from EId syntax nodes. They are
+         -- safe. And you know this, man.
+         typeCheck env c1
+         -- We can assume not only that name is safe, but that it is also a 
+         -- safe string since it wasn't rejected, and reject() checks that it
+         -- is a string.
+         t1 <- typeCheck (M.insert name SafeString env) e1
+         t2 <- typeCheck env e2
+         return $ superType t1 t2
+       Nothing -> checkIf env c e1 e2
    EObject _ props -> do
      ts <- mapM (typeCheck env) (map snd props)
      return Safe
@@ -132,5 +149,50 @@ typeCheck env e = case e of
      return JS
    EEval _ -> error "unexpected EEval"
 
+rejectCondition :: Expr a -> Maybe (Expr a, Ident, Ident)
+rejectCondition (EOp _ OPrimToBool 
+                      [(ELet _ [("$lAnd", c1)] 
+                        (EIf _ 
+                            (EIf _ 
+                                 (EOp _ OPrimToBool [(EId _ "$lAnd")])
+                                 (EBool _ False)
+                                 (EBool _ True))
+                            (EId _ "$lAnd")
+                            (EIf _ (EOp _ OPrimToBool 
+                                        [(ELet _ [("$obj", (EDeref _ (EId _ "reject")))]
+                                            (EIf _ _
+                                                 _
+                                                 (ELet _ [(_, EId _ "$obj")]
+                                                    (EApp _ 
+                                                          (EGetField _ 
+                                                            (EDeref _ _)
+                                                            (EString _ "$code"))
+                                                        [ (EId _ "$global")
+                                                        , (ERef _ (ERef _ (EObject _ [_, _, _, _, _, ("0", EId _ object), ("1", EId _ name)])))]))))])
+                                   (EBool _ False)
+                                   (EBool _ True))))]) = Just (c1, object, name)
+rejectCondition _ = Nothing
 
-isTypeable = typeCheck M.empty . removeHOAS
+checkIf :: Env -> ExprPos -> ExprPos -> ExprPos -> Either String T
+checkIf env c e1 e2 = do
+  t1 <- typeCheck env c
+  t2 <- typeCheck env e1
+  t3 <- typeCheck env e2
+  return (superType t2 t3)
+
+globalEnv =
+  [ "$global", "$Object.prototype", "$Function.prototype", "$Date.prototype"
+  , "$Number.prototype", "$Array.prototype", "$Boolean.prototype"
+  , "$Error.prototype", "$Boolean.prototype", "$Error.prototype" 
+  , "$ConversionError.prototype", "$RangeError.prototype" 
+  , "$ReferenceError.prototype", "$SyntaxError.prototype" 
+  , "$TypeError.prototype", "$URIError.prototype", "Object", "Function"
+  , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
+  , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
+  , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
+  , "uRIError", "this", "$makeException"
+  ]
+
+isTypeable = typeCheck M.empty . addGlobals . removeHOAS
+  where addGlobals body = ELet nopos [(x, EUndefined nopos) | x <- globalEnv] body
+
