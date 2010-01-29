@@ -639,7 +639,7 @@ expr env e = case e of
                            (zip ids [0..])
             formals rest = foldr f rest formals'
             f bind rest = ELet nopos [bind] rest
-            code = ELambda nopos ["this", "arguments"] $ 
+            code = ELambda a ["this", "arguments"] $ 
                      formals $ 
                      ELet nopos locals $
                        ELabel nopos "$return" (stmt env' s)
