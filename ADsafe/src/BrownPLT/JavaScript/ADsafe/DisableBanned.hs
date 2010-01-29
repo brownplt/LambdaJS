@@ -161,8 +161,26 @@ typeCheck e = case e of
     t2 <- typeCheck e2
     t3 <- typeCheck e3
     return JS
-  ELabel _ lbl e -> typeCheck e
-  EBreak _ lbl e -> typeCheck e
+  ELabel _ lbl e -> do
+    te  <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.delete lbl labs
+          return $ superType te tl
+        Nothing -> return te
+  EBreak _ lbl e -> do
+    te <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.insert lbl (superType tl te) labs
+          return World
+        Nothing -> do
+          put $ M.insert lbl te labs
+          return World
   EThrow _ e -> typeCheck e
   EWhile _ e1 e2 -> do
     typeCheck e1
