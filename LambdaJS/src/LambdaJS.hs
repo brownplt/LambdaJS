@@ -7,6 +7,7 @@ import BrownPLT.JavaScript.Parser (parseScriptFromString, parseBlockStmt,
   parseExpression)
 import Text.ParserCombinators.Parsec
 import BrownPLT.JavaScript.Lexer (reservedOp, whiteSpace)
+import BrownPLT.JavaScript.Semantics.ANF
 import BrownPLT.JavaScript.Semantics.PrettyPrint
 import BrownPLT.JavaScript.Semantics.Syntax
 import BrownPLT.JavaScript.Semantics.Desugar
@@ -28,6 +29,15 @@ desugarMain opts = do
       putStrLn (show err)
       exitFailure
 
+desugarANF opts = do
+  str <- getContents
+  case parseScriptFromString "<stdin>" str of
+    Right script -> do
+      putStrLn (prettyANF (exprToANF (desugar script id)))
+      exitSuccess
+    Left err -> do
+      putStrLn (show err)
+      exitFailure
 
 testCase :: CharParser st Doc
 testCase = do
@@ -68,6 +78,7 @@ data Flag
 options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
+  , Option [] ["anf"] (NoArg (Action desugarANF)) "desugar and ANF JavaScript"
   , Option [] ["test-cases"] (NoArg (Action testCaseMain)) "desugar test cases"
   , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
   ]

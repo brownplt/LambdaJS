@@ -1,9 +1,11 @@
 module BrownPLT.JavaScript.Semantics.PrettyPrint
   ( pretty
   , renderExpr
+  , prettyANF
+  , renderExpANF
   ) where
 
-
+import BrownPLT.JavaScript.Semantics.ANF
 import BrownPLT.JavaScript.Semantics.Syntax
 import Text.PrettyPrint.HughesPJ
 import Control.Monad.State
@@ -87,10 +89,10 @@ conv s = replace s "\\NUL" "\\0"
 
 expr :: ExprPos -> M Doc
 expr e = case e of
-  ENumber a n -> return $ text ((showNumber n) ++ show a)
-  EString a s -> return $ text (conv $ (show s ++ show a)) -- TODO: escaping from Haskell to Scheme?
-  EBool a True -> return $ text ("#t" ++ show a)
-  EBool a False -> return $text ("#f" ++ show a)
+  ENumber a n -> return $ text (showNumber n)
+  EString a s -> return $ text (conv $ show s) -- TODO: escaping from Haskell to Scheme?
+  EBool a True -> return $ text "#t"
+  EBool a False -> return $ text "#f"
   EUndefined a -> return $ text "undefined"
   ENull a -> return $ text "null"
   ELambda a xs e -> do
@@ -184,6 +186,103 @@ expr e = case e of
     d2 <- expr e2
     return $ parens $ text "while" $+$ d1 $+$ d2
 
+valueANF :: Value a -> M Doc
+valueANF v = 
+    case v of
+      VNumber a n -> return $ text (showNumber n)
+      VString a s -> return $ text (conv (show s))
+      VBool a True -> return $ text "#t"
+      VBool a False -> return $ text "#f"
+      VUndefined a -> return $ text "undefined"
+      VNull a -> return $ text "null"
+      VId a x -> return $ text x
+      VLambda a xs e -> do
+             d <- expANF e
+             return $ parens $ text "lambda" <+> parens (hsep $ map text xs) $+$ d
+
+bindANF :: BindExp a -> M Doc
+bindANF b =
+    case b of 
+      BObject a ps -> do
+             let prop (x, e1) = do
+                        d1 <- valueANF e1
+                        return (parens (text (show x) <+> d1))
+             props <- mapM prop ps
+             return $ parens $ text "object" <+> vcat props
+      BSetRef a e1 e2 -> do
+             d1 <- valueANF e1
+             d2 <- valueANF e2
+             return $ parens $ text "set!" $+$ d1 $+$ d2
+      BRef a e1 -> do
+             d1 <- valueANF e1
+             return $ parens $ text "alloc" <+> d1
+      BDeref a e1 -> do
+             d1 <- valueANF e1
+             return $ parens $ text "deref" <+> d1
+      BGetField a e1 e2 -> do
+             d1 <- valueANF e1
+             d2 <- valueANF e2
+             return $ parens $ text "get-field" $+$ d1 $+$ d2
+      BUpdateField a e1 e2 e3 -> do
+             d1 <- valueANF e1
+             d2 <- valueANF e2
+             d3 <- valueANF e3
+             return $ parens $ text "update-field" <+> d1 $+$ d2 $+$ d3
+      BDeleteField a e1 e2 -> do
+             d1 <- valueANF e1
+             d2 <- valueANF e2
+             return $ parens $ text "delete-field" <+> d1 $+$ d2
+      BOp a o es -> do
+             ds <- mapM valueANF es
+             return $ parens $ op o <+> hsep ds
+      BApp a e es -> do
+             ds <- mapM valueANF (e:es)
+             return $ parens $ hsep ds
+      BIf a e1 e2 e3 -> do
+             d1 <- valueANF e1
+             d2 <- expANF e2
+             d3 <- expANF e3
+             return $ parens $ text "if" <+> d1 $+$ d2 $+$ d3
+      BValue a v -> valueANF v
+
+expANF :: Exp a -> M Doc
+expANF e = 
+    case e of
+      ALet a binds e -> do
+             let f (x,e') = do
+                          d' <- bindANF e'
+                          return $ parens $ text x <+> d'
+             dBinds <- mapM f binds
+             d <- expANF e
+             return $ parens $ text "let" $+$ parens (vcat dBinds) $+$ d
+      ARec a binds e -> do
+             let f (x,e') = do
+                          d' <- valueANF e'
+                          return $ parens $ text x <+> d'
+             dBinds <- mapM f binds
+             d <- expANF e
+             return $ parens $ text "let" $+$ parens (vcat dBinds) $+$ d
+      ALabel a lbl e -> do
+             d <- expANF e
+             return $ parens $ text "label" <+> text lbl $+$ d
+      ABreak a lbl e -> do
+             d <- valueANF e
+             return $ parens $ text "break" <+> text lbl $+$ d
+      AThrow a e -> do
+             d <- valueANF e
+             return $ parens $ text "throw" <+> d
+      ACatch a e1 e2 -> do
+             d1 <- expANF e1
+             d2 <- valueANF e2
+             return $ parens $ text "try-catch" $+$ d1 $+$ d2
+      AFinally a e1 e2 -> do
+             d1 <- expANF e1
+             d2 <- expANF e2
+             return $ parens $ text "try-finally" $+$ d1 $+$ d2
+      AReturn a v -> valueANF v
+      ABind a b -> bindANF b
+
+
 exprPositions :: ExprPos -> M Doc
 exprPositions e = do
   inner <- expr e
@@ -194,3 +293,9 @@ pretty e = render (renderExpr e)
 
 renderExpr :: ExprPos -> Doc
 renderExpr e = evalState (expr e) 0
+
+prettyANF :: Exp a -> String
+prettyANF e = render (renderExpANF e)
+
+renderExpANF :: Exp a -> Doc
+renderExpANF e = evalState (expANF e) 0

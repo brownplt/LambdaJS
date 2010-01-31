@@ -39,6 +39,7 @@ Library
     BrownPLT.JavaScript.Semantics.RemoveHOAS
     BrownPLT.JavaScript.Semantics.FreeVars
     BrownPLT.JavaScript.Semantics.AssignableVars
+    BrownPLT.JavaScript.Semantics.ANF
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
