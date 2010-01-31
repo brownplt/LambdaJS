@@ -1,4 +1,8 @@
-module BrownPLT.JavaScript.ADsafe.DisableBanned ( isTypeable, rejectCondition ) where
+module BrownPLT.JavaScript.ADsafe.DisableBanned ( isTypeable ) where
+
+import Control.Monad.Error
+import Control.Monad.Reader
+import Control.Monad.State
 
 import Data.Map ( Map )
 import qualified Data.Map as M
@@ -9,18 +13,34 @@ import BrownPLT.JavaScript.Semantics.Syntax
 import BrownPLT.JavaScript.Semantics.RemoveHOAS ( removeHOAS )
 import BrownPLT.JavaScript.Semantics.PrettyPrint ( pretty )
 
+import Text.ParserCombinators.Parsec.Pos ( sourceLine, sourceColumn )
 
-type Env = Map Ident T
-
-data T = SafeString | Safe | JS
+-- Types
+--
+data T = SafeString | Safe | World | JS
   deriving ( Show, Eq, Ord )
 
+-- Environment that maps identifiers to types.
+--
+type IdentEnv = Map Ident T
 
+-- Environment that maps identifiers to types.
+-- 
+type LabelEnv = Map Label T
+
+-- Typer Monad. Keeps track of identifier environment, and threading label
+-- state.
+--
+newtype Typer a = Typer (StateT LabelEnv (ReaderT IdentEnv (Either String)) a)
+  deriving ( Functor, Monad, MonadState LabelEnv, MonadReader IdentEnv, MonadError String )
+
+
+subType :: T -> T -> Bool
 subType x y | x == y = True
-subType Safe JS = True
-subType SafeString Safe = True
-subType SafeString JS = True
-subType _ _ = False
+subType _ JS         = True
+subType SafeString _ = True
+subType Safe       World  = True
+subType _          _ = False
 
 superType :: T -> T -> T
 superType t1 t2 =
@@ -29,12 +49,6 @@ superType t1 t2 =
     GT -> t1
     EQ -> t1
 
-instance Monad (Either String) where
-  return x = Right x
-  fail s = Left s
-  (Right x) >>= f = f x
-  (Left s) >>= _ = Left s
-
 
 -- ADsafe banned list
 banned :: Set String
@@ -42,112 +56,147 @@ banned =
   S.fromList [ "arguments", "callee", "caller", "constructor", "eval"
              , "prototype", "unwatch", "valueOf", "watch" ]
 
-typeCheck :: Env -> ExprPos -> Either String T
-typeCheck env e = case e of
-   ENumber _ _  -> return Safe
-   EString _ s  -> return $ if s `S.member` banned then JS else Safe
-   EUndefined _ -> return Safe
-   EBool _ _    -> return Safe
-   ENull _ -> return Safe
-   ELambda _ xs e -> do
-     let env' = M.fromList (map (\x -> (x, JS)) xs)
-     typeCheck (M.union env' env) e
-     return Safe
-   EId _ x -> case M.lookup x env of
-     Just t -> return t
-     Nothing -> error $ "unbound identifier: " ++ x
-   ELet _ binds body -> do
-     boundTypes <- mapM (typeCheck env) (map snd binds)
-     let env' = M.fromList $ zip (map fst binds) boundTypes
-     typeCheck (M.union env' env) body
-   EDeref _ e -> do
-     t <- typeCheck env e
-     return JS
-   EDeleteField _ e1 e2 -> do
-     typeCheck env e1
-     typeCheck env e2
-     return JS
-   ESetRef _ e1 e2 -> do
-     typeCheck env e1
-     typeCheck env e2
-     return JS
-   ERef _ e -> do
-     t <- typeCheck env e
-     return Safe
-   EApp _ e es -> do
-     ts <- mapM (typeCheck env) (e:es)
-     case all (\t -> subType t JS) ts of
-       True -> return JS
-       False -> fail "EApp expects all arguments to be subtypes of JS"
-   ESeq _ e1 e2 -> do
-     t1 <- typeCheck env e1
-     typeCheck env e2
-   EOp _ OPrimToStr [e] -> do
-     typeCheck env e
-   -- Other primitives are effectively uninterpreted.  Primitives produce
-   -- constants (and constant-carrying objects).  Therefore, they cannot
-   -- introduce locations.
-   EOp _ _ es -> do
-     ts <- mapM (typeCheck env) es
-     return JS
-   EIf _ (EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "location"]) e2 e3
-     | M.lookup x env == Just SafeString  ->
-     typeCheck env e3
-   EIf _ (EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "string"]) e2 e3 
-     | M.lookup x env == Just Safe -> do
-    t2 <- typeCheck (M.insert x SafeString env) e2
-    t3 <- typeCheck env e3
-    return (superType t2 t3)
-   EIf _ c e1 e2 ->
-     case rejectCondition c of
-       Just (c1, object, name) -> do
-         -- object and name are strings taken from EId syntax nodes. They are
-         -- safe. And you know this, man.
-         typeCheck env c1
-         -- We can assume not only that name is safe, but that it is also a 
-         -- safe string since it wasn't rejected, and reject() checks that it
-         -- is a string.
-         t1 <- typeCheck (M.insert name SafeString env) e1
-         t2 <- typeCheck env e2
-         return $ superType t1 t2
-       Nothing -> checkIf env c e1 e2
-   EObject _ props -> do
-     ts <- mapM (typeCheck env) (map snd props)
-     return Safe
-   EGetField _ e1 e2 -> do
-     t1 <- typeCheck env e1
-     t2 <- typeCheck env e2
-     case t2 of
-       Safe -> return JS
-       SafeString -> return JS
-       otherwise -> fail $ "unsafe field lookup.\n" ++ 
-                           "type of field is " ++ 
-                           show (M.lookup "field" env) ++
-                           "\n" ++
-                           (pretty e2)
-   EUpdateField _ e1 e2 e3 -> do
-     t1 <- typeCheck env e1
-     t2 <- typeCheck env e2
-     t3 <- typeCheck env e3
-     return JS
-   ELabel _ lbl e -> typeCheck env e >> return JS
-   EBreak _ lbl e -> typeCheck env e >> return JS
-   EThrow _ e -> typeCheck env e
-   ELet1{} -> error "unexpected ELet1 (removeHOAS not called?)"
-   ELet2{} -> error "unexpected ELet2 (removeHOAS not called?)"
-   EWhile _ e1 e2 -> do
-     typeCheck env e1
-     typeCheck env e2
-     return JS
-   ECatch _ e1 e2 -> do
-     typeCheck env e1
-     typeCheck env e2
-     return JS
-   EFinally _ e1 e2 -> do
-     typeCheck env e1
-     typeCheck env e2
-     return JS
-   EEval _ -> error "unexpected EEval"
+typeCheck :: Expr SourcePos -> Typer T
+typeCheck e = case e of
+  ENumber _ _  -> return Safe
+  EString _ s  -> return $ if s `S.member` banned then JS else Safe
+  EUndefined _ -> return Safe
+  EBool _ _    -> return Safe
+  ENull _ -> return Safe
+  ELambda a xs e ->
+    let env' = M.fromList (map (\x -> (x, JS)) xs)
+      in local (M.union env') $ do
+            t1 <- typeCheck e
+            if sourceLine a == 1611 && sourceColumn a == 14 
+              then if subType t1 World
+                        then return t1
+                        else throwError $ "get does not satisfy the property: " ++ (show t1)
+              else return t1
+  EId _ x -> do
+    result <- asks $ M.lookup x
+    case result of
+      Just t  -> return t
+      Nothing -> error $ "unbound identifier: " ++ x
+  ELet _ binds body -> do
+    boundTypes <- mapM typeCheck (map snd binds)
+    let env' = M.fromList $ zip (map fst binds) boundTypes
+    local (M.union env') $ typeCheck body
+  EDeref _ e -> do
+    -- The result of (deref e) should have the same type as e
+    typeCheck e
+  EDeleteField _ e1 e2 -> do
+    typeCheck e1
+    typeCheck e2
+    return JS
+  ESetRef _ e1 e2 -> do
+    typeCheck e1
+    typeCheck e2
+    return JS
+  ERef _ e -> do
+    -- The result of (ref e) should have the same type as e
+    typeCheck e
+  EApp _ e es -> do
+    t  <- typeCheck e
+    ts <- mapM typeCheck es
+    case subType t World of
+      True  -> return t
+      False -> return JS
+  ESeq _ e1 e2 -> do
+    t1 <- typeCheck e1
+    typeCheck e2
+  EOp _ OPrimToStr [e] -> do
+    typeCheck e
+  -- Other primitives are effectively uninterpreted.  Primitives produce
+  -- constants (and constant-carrying objects).  Therefore, they cannot
+  -- introduce locations.
+  EOp _ _ es -> do
+    ts <- mapM typeCheck es
+    return World
+  EIf _ c@(EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "location"]) e2 e3 -> do
+    result <- asks $ M.lookup x
+    case result of
+       Just SafeString -> typeCheck e3
+       otherwise       -> checkIf c e2 e3
+  EIf _ c@(EOp _ OStrictEq [EOp _ OTypeof [EId _ x], EString _ "string"]) e2 e3 -> do
+    result <- asks $ M.lookup x
+    case result of
+       Just Safe -> do
+           t2 <- local (M.insert x SafeString) $ typeCheck e2
+           t3 <- typeCheck e3
+           return $ superType t2 t3
+       otherwise -> checkIf c e2 e3
+  EIf _ c e1 e2 ->
+    case rejectCondition c of
+      Just (c1, object, name) -> do
+        -- object and name are strings taken from EId syntax nodes. They are
+        -- safe. And you know this, man.
+        typeCheck c1
+        -- We can assume not only that name is safe, but that it is also a 
+        -- safe string since it wasn't rejected, and reject() checks that it
+        -- is a string.
+        t1 <- local (M.insert name SafeString) $ typeCheck e1
+        t2 <- typeCheck e2
+        return $ superType t1 t2
+      Nothing -> checkIf c e1 e2
+  EObject _ props -> do
+    ts <- mapM typeCheck (map snd props)
+    return $ foldl superType World ts
+  EGetField _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    case t2 of
+      Safe -> return World
+      SafeString -> return World
+      otherwise -> return JS
+{-
+      otherwise -> do
+        field <- asks $ M.lookup "field"
+        throwError $ "unsafe field lookup.\n" ++ 
+                          "type of field is " ++ 
+                          show field ++ "\n" ++
+                          (pretty e2)
+-}
+  EUpdateField _ e1 e2 e3 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    t3 <- typeCheck e3
+    return JS
+  ELabel _ lbl e -> do
+    te  <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.delete lbl labs
+          return $ superType te tl
+        Nothing -> return te
+  EBreak _ lbl e -> do
+    te <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.insert lbl (superType tl te) labs
+          return World
+        Nothing -> do
+          put $ M.insert lbl te labs
+          return World
+  EThrow _ e -> typeCheck e
+  EWhile _ e1 e2 -> do
+    typeCheck e1
+    typeCheck e2
+    return JS
+  ECatch _ e1 e2 -> do
+    typeCheck e1
+    typeCheck e2
+    return JS
+  EFinally _ e1 e2 -> do
+    typeCheck e1
+    typeCheck e2
+    return JS
+  EEval _ -> error "unexpected EEval"
+  ELet1{} -> error "unexpected ELet1 (removeHOAS not called?)"
+  ELet2{} -> error "unexpected ELet2 (removeHOAS not called?)"
 
 rejectCondition :: Expr a -> Maybe (Expr a, Ident, Ident)
 rejectCondition (EOp _ OPrimToBool 
@@ -173,11 +222,10 @@ rejectCondition (EOp _ OPrimToBool
                                    (EBool _ True))))]) = Just (c1, object, name)
 rejectCondition _ = Nothing
 
-checkIf :: Env -> ExprPos -> ExprPos -> ExprPos -> Either String T
-checkIf env c e1 e2 = do
-  t1 <- typeCheck env c
-  t2 <- typeCheck env e1
-  t3 <- typeCheck env e2
+checkIf c e1 e2 = do
+  t1 <- typeCheck c
+  t2 <- typeCheck e1
+  t3 <- typeCheck e2
   return (superType t2 t3)
 
 globalEnv =
@@ -193,6 +241,7 @@ globalEnv =
   , "uRIError", "this", "$makeException"
   ]
 
-isTypeable = typeCheck M.empty . addGlobals . removeHOAS
-  where addGlobals body = ELet nopos [(x, EUndefined nopos) | x <- globalEnv] body
+isTypeable = runTyper . typeCheck . addGlobals . removeHOAS
+  where addGlobals b = ELet nopos [(x, EUndefined nopos) | x <- globalEnv] b
+        runTyper (Typer m) = runReaderT (evalStateT m M.empty) M.empty
 
