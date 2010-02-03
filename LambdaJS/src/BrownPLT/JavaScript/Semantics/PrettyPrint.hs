@@ -199,6 +199,7 @@ valueANF v =
       VLambda a xs e -> do
              d <- expANF e
              return $ parens $ text "lambda" <+> parens (hsep $ map text xs) $+$ d
+      VEval a -> return $ text "eval-semantic-bomb"
 
 bindANF :: BindExp a -> M Doc
 bindANF b =
@@ -281,7 +282,6 @@ expANF e =
              return $ parens $ text "try-finally" $+$ d1 $+$ d2
       AReturn a v -> valueANF v
       ABind a b -> bindANF b
-
 
 exprPositions :: ExprPos -> M Doc
 exprPositions e = do

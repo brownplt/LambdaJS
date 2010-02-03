@@ -10,6 +10,7 @@ where
 import BrownPLT.JavaScript.Semantics.Syntax
 import Control.Monad.State
 import BrownPLT.JavaScript.Semantics.Prelude
+import BrownPLT.JavaScript.Semantics.RemoveHOAS
 
 data Value a
   = VNumber a Double
@@ -19,7 +20,8 @@ data Value a
   | VNull a
   | VId a Ident
   | VLambda a [Ident] (Exp a)
-  deriving (Show, Data, Typeable)
+  | VEval a
+    deriving (Show, Data, Typeable)
 
 
 data BindExp a
@@ -34,7 +36,7 @@ data BindExp a
   | BOp a Op [Value a]
   | BApp a (Value a) [Value a]
   | BIf a (Value a) (Exp a) (Exp a)
-  deriving (Show, Data, Typeable)
+    deriving (Show, Data, Typeable)
 
 data Exp a
   = ALet a [(Ident, BindExp a)] (Exp a)
@@ -46,7 +48,7 @@ data Exp a
   | AFinally a (Exp a) (Exp a)
   | AReturn a (Value a)
   | ABind a (BindExp a)
-  deriving (Show, Data, Typeable)
+    deriving (Show, Data, Typeable)
 
 type M a = State Int a
 
@@ -63,7 +65,7 @@ toANFMany :: Data a => [(Expr a)]
 toANFMany [] k = k []
 toANFMany (e:es) k = toANF e (\v -> do
                                 x <- newVar
-                                rest <- toANFMany es (\vs -> k (v:vs))
+                                rest <- toANFMany es (\xs -> k ((VId (label e) x):xs))
                                 return (ALet (label e) [(x, (BValue (label e) v))]
                                              rest))
 
@@ -173,9 +175,9 @@ toANF expr k =
       EFinally a body rest -> toANF rest (\vrest -> do
                                             vbody <- toANF body (\v -> return (AReturn a v))
                                             return (AFinally a vbody (AReturn a vrest)))
-      ELet1 a e1 e2 -> return (AReturn (label e1) (VUndefined (label e1)))
-      ELet2 a e1 e2 e3 -> return (AReturn (label e1) (VUndefined (label e1)))
-      EEval a ->  return (AReturn (label expr) (VUndefined (label expr)))
+      ELet1 a e1 e2 -> return (AReturn (label e1) (VString (label e1) "ELet1 shouldn't be here"))
+      ELet2 a e1 e2 e3 -> return (AReturn (label e1) (VString (label e1) "ELet2 shouldn't be here"))
+      EEval a ->  k (VEval a)
 --  Don't handle these cases -- only will be called after removeHOAS,
 --  and shouldn't have eval anyway
 -- 
@@ -187,4 +189,4 @@ toANF expr k =
 -- immediately aborts.
 
 exprToANF :: Data a => Expr a -> Exp a
-exprToANF e = evalState (toANF e (\v -> (return (AReturn (label e) v)))) 0
+exprToANF e = evalState (toANF (removeHOAS e) (\v -> (return (AReturn (label e) v)))) 0

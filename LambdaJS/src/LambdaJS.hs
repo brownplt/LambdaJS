@@ -30,10 +30,14 @@ desugarMain opts = do
       exitFailure
 
 desugarANF opts = do
+  env <- return $ case opts of 
+                    [] -> ecma262Env
+                    [NoEnv] -> id
+                    otherwise -> fail "spurious command line args"
   str <- getContents
   case parseScriptFromString "<stdin>" str of
     Right script -> do
-      putStrLn (prettyANF (exprToANF (desugar script id)))
+      putStrLn (prettyANF (exprToANF (desugar script env)))
       exitSuccess
     Left err -> do
       putStrLn (show err)
