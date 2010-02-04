@@ -1,8 +1,9 @@
 module Main ( main ) where
 
+import Data.Char ( toLower )
+import Data.Either ( either )
 import Data.Map ( Map )
 import qualified Data.Map as M
-import Data.Char ( toLower )
 
 import System.Console.GetOpt
 import System.Environment
@@ -24,9 +25,9 @@ import BrownPLT.JavaScript.Semantics.RemoveHOAS
 
 desugarMain     opts = mainTemplate pretty opts
 desugarANFMain  opts = mainTemplate (prettyANF . adsafeANF) opts
-getCheckMain    opts = mainTemplateShow  B.isTypeable opts
-evalCheckMain   opts = mainTemplateShow  (E.isTypeable . adsafeANF) opts
-windowCheckMain opts = mainTemplateShow  (W.isTypeable . adsafeANF) opts
+getCheckMain    opts = mainTemplateError B.isTypeable opts
+evalCheckMain   opts = mainTemplateError E.isTypeable opts
+windowCheckMain opts = mainTemplateError (W.isTypeable . adsafeANF) opts
 
 mainTemplate :: (ExprPos -> String) -> [Flag] -> IO ()
 mainTemplate fn opts = do
@@ -42,6 +43,9 @@ mainTemplate fn opts = do
 
 mainTemplateShow :: Show a => (ExprPos -> a) -> [Flag] -> IO ()
 mainTemplateShow f = mainTemplate (show . f)
+
+mainTemplateError :: Show a => (ExprPos -> Either String a) -> [Flag] -> IO ()
+mainTemplateError f = mainTemplate ((either id show) . f)
 
 liftJS fn env script = fn $ adsafeDesugar script env
 
