@@ -271,10 +271,10 @@ infixOp op e1 e2 = case op of
               EWhile nopos (eNot $ isNull (EDeref nopos $ EId nopos curLHS)) $
                 --if it matches the rhs.prototype, we're done
                 EIf nopos (eStxEq (EDeref nopos $ EId nopos curLHS) (EId nopos fProt))
-                 (ESeq nopos (ESetRef nopos (EId nopos res) (EBool nopos True))
+                 (ESeq nopos (ESetRef nopos res (EBool nopos True))
                        (EBreak nopos "$break" (EUndefined nopos)))
                  --otherwise go up once the prototype chain
-                 (ESetRef nopos (EId nopos curLHS) (EGetField nopos (EDeref nopos $EDeref nopos $ EId nopos curLHS) 
+                 (ESetRef nopos curLHS (EGetField nopos (EDeref nopos $EDeref nopos $ EId nopos curLHS) 
                                                   (EString nopos "$proto"))))
             (EDeref nopos $ EId nopos res)
 
@@ -370,7 +370,7 @@ prefixOp op e = case op of
             ("$delStr", eString)] $
         EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", EId nopos "$delStr"])
             (ESeq nopos
-              (ESetRef nopos (EId nopos "$delObj")
+              (ESetRef nopos "$delObj"
                 (EDeleteField a1 (EDeref a2 $ EId nopos "$delObj") (EId nopos "$delStr")))
               (EBool nopos True))
             (EBool nopos False)
@@ -400,8 +400,8 @@ isArrayIndex e =
 --helper since it's used in stmt too:
 eAssignLVar :: Env -> String -> ExprPos -> ExprPos
 eAssignLVar env x e = case M.lookup x env of
-  Just True -> ESetRef nopos (EId nopos x) e
-  Nothing -> ESetRef nopos (EId nopos "$global") 
+  Just True -> ESetRef nopos x e
+  Nothing -> ESetRef nopos "$global"
                      (EUpdateField nopos (EDeref nopos $ EId nopos "$global")
                                    (EString nopos x)
                                    e)
@@ -441,7 +441,7 @@ eNewDirect eConstr argumentObj =
                          [EId nopos "$newObj", argumentObj]) $ \newResult ->
                 EIf nopos (isRefComb isObject (EId nopos newResult))
                     (EId nopos newResult)
-                    (ESeq nopos (ESetRef nopos (EId nopos "$newObj")
+                    (ESeq nopos (ESetRef nopos "$newObj"
                       (EDeleteField nopos (EDeref nopos $ EId nopos "$newObj")
                                     (EString nopos "$constructing")))
                       (EId nopos "$newObj")))
@@ -480,7 +480,7 @@ theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId ->
          (setObj objRef fieldRef (EId nopos vId)))
        (EId nopos vId)
   where setObj objRef field v = 
-          ESetRef nopos (EId nopos objRef) 
+          ESetRef nopos objRef
                   (EUpdateField nopos (EDeref nopos (EId nopos objRef)) (EId nopos field) v)
         setArray objRef field v = 
           --15.4.5.1:
@@ -496,7 +496,7 @@ theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId ->
                        (EId nopos r)
                        (ESeq nopos
                           (ESetRef nopos 
-                            (EId nopos objRef)
+                            objRef
                             (EUpdateField nopos (EDeref nopos (EId nopos objRef))
                                           (EString nopos "length")
                                           (EOp nopos ONumPlus [EId nopos "$aindx",
@@ -511,12 +511,12 @@ withLValue :: Env
 withLValue env (LVar a x) bodyFn = case M.lookup x env of
   Just True -> 
     bodyFn (EDeref nopos (EId a x)) 
-            (\v -> ESeq nopos (ESetRef nopos (EId nopos x) v) (EDeref nopos (EId nopos x)))
+            (\v -> ESeq nopos (ESetRef nopos x v) (EDeref nopos (EId nopos x)))
   Nothing ->
     bodyFn (getGlobalVar x) $ \v ->
                EGetField nopos
                  (EDeref nopos
-                   (ESetRef nopos (EId nopos "$global")
+                   (ESetRef nopos "$global"
                             (EUpdateField nopos (EDeref nopos (EId nopos "$global"))
                                           (EString nopos x) v)))
                  (EString nopos x)
@@ -672,7 +672,7 @@ maybeExpr env (Just e) = expr env e
 varDecl :: Env -> VarDecl SourcePos -> ExprPos
 varDecl env (VarDecl a1 (Id a2 x) rhs) = case M.lookup x env of
     --True: it's a local var. if no declaration, don't do anything.
-    Just True -> if (isNothing rhs) then EUndefined a1 else ESetRef a1 (EId a2 x) e
+    Just True -> if (isNothing rhs) then EUndefined a1 else ESetRef a1 x e
     -- It's global. if it exists, do nothing, else set to undefined.
     Nothing -> 
       if (isNothing rhs)
@@ -684,7 +684,7 @@ varDecl env (VarDecl a1 (Id a2 x) rhs) = case M.lookup x env of
   where e = case rhs of
               Nothing -> EUndefined nopos
               Just e' -> expr env e'                                   
-        setglob = ESetRef nopos (EId nopos "$global") 
+        setglob = ESetRef nopos "$global"
                    (EUpdateField a1 (EDeref nopos $ EId nopos "$global")
                                  (EString a2 x) e)
 
@@ -762,7 +762,7 @@ stmt env s = case s of
         e' = expr env e
       in ELet nopos [("$doTest", ERef nopos $ EBool nopos True)]
               (EWhile a (eOr (EDeref nopos $ EId nopos "$doTest") e')
-                        (ESeq nopos s' (ESetRef nopos (EId nopos "$doTest")
+                        (ESeq nopos s' (ESetRef nopos "$doTest"
                                                       (EBool nopos False))))
   SwitchStmt a e cases ->
     ELet1 a (expr env e) $ \caseId ->
@@ -788,7 +788,7 @@ stmt env s = case s of
                                      EDeref nopos $ EId nopos "$finIter"]) $
           (ELabel nopos "$continue" $
              --update our iterator
-             ESeq nopos (ESetRef nopos (EId nopos "$finIter")
+             ESeq nopos (ESetRef nopos "$finIter"
                            (EOp nopos OObjIterNext [EDeref nopos $ EId nopos "$finObj",
                                               EDeref nopos $ EId nopos "$finIter"]))$
                --get the value into the lvar and eval the body

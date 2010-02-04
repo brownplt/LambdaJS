@@ -91,10 +91,9 @@ typeBind env b =
                             (map (typeVal env) 
                              (map snd fields)))) in
           (BObject a newfields, R RObject)
-      BSetRef a v1 v2 ->
+      BSetRef a id v2 ->
           let (v2', t2) = typeVal env v2 
-              (v1', t1) = typeVal env v1 in
-          (BSetRef a v1' v2', t2)
+            in (BSetRef a id v2', t2)
       BRef a v ->
           let (v', t) = typeVal env v in
           (BRef a v', R RLocation)

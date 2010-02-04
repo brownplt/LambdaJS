@@ -26,7 +26,7 @@ data Value a
 
 data BindExp a
   = BObject a [(String, Value a)]
-  | BSetRef a (Value a) (Value a)
+  | BSetRef a Ident (Value a)
   | BRef a (Value a)
   | BDeref a (Value a)
   | BGetField a (Value a) (Value a)
@@ -105,12 +105,10 @@ toANF expr k =
                            toANFMany vals (\vvals -> do
                                              ebody <- toANF body (\v -> (k v))
                                              return (ALet a (zip names (map (BValue a) vvals)) ebody))
-      ESetRef a e1 e2 ->
-              toANF e1 (\v1 ->
-                        toANF e2 (\v2 -> do
+      ESetRef a id e -> toANF e (\v -> do
                                     x <- newVar
                                     rest <- k (VId a x)
-                                    return (ALet a [(x, (BSetRef a v1 v2))] rest)))
+                                    return (ALet a [(x, (BSetRef a id v))] rest))
       ERef a e -> toANF e (\v -> do 
                              x <- newVar
                              rest <- k (VId a x)

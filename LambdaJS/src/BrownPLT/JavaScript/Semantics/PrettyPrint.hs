@@ -167,10 +167,9 @@ expr e = case e of
     d1 <- expr e1
     d2 <- expr e2
     return $ parens $ text "get-field" $+$ d1 $+$ d2
-  ESetRef a e1 e2 -> do
-    d1 <- expr e1
-    d2 <- expr e2
-    return $ parens $ text "set!" $+$ d1 $+$ d2
+  ESetRef a id e -> do
+    d <- expr e
+    return $ parens $ text "set!" $+$ text id $+$ d
   EEval a -> return $ text "eval-semantic-bomb"
   EUpdateField a e1 e2 e3 -> do
     d1 <- expr e1
@@ -210,10 +209,9 @@ bindANF b =
                         return (parens (text (show x) <+> d1))
              props <- mapM prop ps
              return $ parens $ text "object" <+> vcat props
-      BSetRef a e1 e2 -> do
-             d1 <- valueANF e1
-             d2 <- valueANF e2
-             return $ parens $ text "set!" $+$ d1 $+$ d2
+      BSetRef a id e -> do
+             d <- valueANF e
+             return $ parens $ text "set!" $+$ text id $+$ d
       BRef a e1 -> do
              d1 <- valueANF e1
              return $ parens $ text "alloc" <+> d1

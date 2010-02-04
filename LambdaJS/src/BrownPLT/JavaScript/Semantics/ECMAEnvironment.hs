@@ -125,7 +125,7 @@ globalValuesAndFunctions =
 
 --update the object with everything in the given list
 --used to close recursions
-updateObject :: ExprPos -> [(Ident, ExprPos)] -> ExprPos -> ExprPos
+updateObject :: Ident -> [(Ident, ExprPos)] -> ExprPos -> ExprPos
 updateObject objE [] rest = rest
 updateObject objE ((name,e):xs) rest = 
   ESeq nopos (setField objE (EString nopos name) e)
@@ -258,14 +258,14 @@ arrayPrototype = object
            [primToNum (getFieldT (EString nopos "length")), ENumber nopos (-1)]))] $
            ELet nopos [("$result", getFieldT (primToStr (EId nopos "$newlen")))] $
              ESeq nopos (setFieldT (EString nopos "length") (EId nopos "$newlen")) $
-               ESeq nopos (ESetRef nopos (EId nopos "this")
+               ESeq nopos (ESetRef nopos "this"
                       (EDeleteField nopos (EDeref nopos $ EId nopos "this")
                                     (primToStr $ EId nopos "$newlen")))
                     (EId nopos "$result")))
   , ("push", functionObject [] $ --use a for loop:
     ELet nopos [("$i", ERef nopos (ENumber nopos 0))] $ ESeq nopos ( 
       eFor (EUndefined nopos) --init, incr, test, body
-           (ESetRef nopos (EId nopos "$i") (EOp nopos ONumPlus [EDeref nopos (EId nopos "$i"), ENumber nopos 1]))
+           (ESetRef nopos "$i" (EOp nopos ONumPlus [EDeref nopos (EId nopos "$i"), ENumber nopos 1]))
            (EOp nopos OLt [EDeref nopos (EId nopos "$i"),
                      EGetField nopos (EDeref nopos (EDeref nopos (EId nopos "arguments"))) 
                                (EString nopos "length")])
@@ -324,9 +324,9 @@ jsObject = ERef nopos $ object
 
 --helpers for constructors:
 setField lhse fnamee fe =
-  ESetRef nopos lhse (EUpdateField nopos (EDeref nopos lhse) fnamee fe)
-setFieldT = setField (EId nopos "this")
-setFieldTS a b = ESeq nopos $ setField (EId nopos "this") a b
+  ESetRef nopos lhse (EUpdateField nopos (EDeref nopos (EId nopos lhse)) fnamee fe)
+setFieldT = setField "this"
+setFieldTS a b = ESeq nopos $ setField "this" a b
 getField lhse fnamee = EGetField nopos (EDeref nopos lhse) fnamee
 getFieldT = getField (EId nopos "this")
 
@@ -369,7 +369,7 @@ jsArray = ERef nopos $ object
         ESeq nopos (setFieldT (primToStr (EDeref nopos (EId nopos "$i")))
                         (EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos"arguments")
                                    (primToStr (EDeref nopos (EId nopos "$i")))))
-             (ESetRef nopos (EId nopos "$i")
+             (ESetRef nopos "$i"
                       (EOp nopos ONumPlus [EDeref nopos (EId nopos "$i"), ENumber nopos 1]))
 
 
@@ -568,12 +568,12 @@ functionPrototypeValues =
     ELet2 nopos (ERef nopos (ENumber nopos 0))(ERef nopos$eArgumentsObj [] (EId nopos "this")) $ \i argsObj ->
     ESeq nopos ( 
       eFor (EUndefined nopos) --init, incr, test, body
-           (ESetRef nopos (EId nopos i) (EOp nopos ONumPlus [EDeref nopos (EId nopos i), ENumber nopos 1]))
+           (ESetRef nopos i (EOp nopos ONumPlus [EDeref nopos (EId nopos i), ENumber nopos 1]))
            (EOp nopos OLt [EDeref nopos (EId nopos i), EGetField nopos (EDeref nopos ae) (EString nopos "length")])
-           (ESeq nopos (setField (EId nopos argsObj) (primToStr (getField (EId nopos argsObj) 
+           (ESeq nopos (setField argsObj (primToStr (getField (EId nopos argsObj) 
                                                       (EString nopos "length")))
                            (EGetField nopos (EDeref nopos ae) (primToStr (EDeref nopos $ EId nopos i))))
-                 (setField (EId nopos argsObj) (EString nopos "length")
+                 (setField argsObj (EString nopos "length")
                    (EOp nopos ONumPlus [getField (EId nopos argsObj) (EString nopos "length"),
                                   ENumber nopos 1]))))
       (EId nopos argsObj)
@@ -759,7 +759,7 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit
    "Number", "Error", "ConversionError", "EvalError", "RangeError",
    "ReferenceError", "SyntaxError", "TypeError", "URIError"]
  where
-  doit name = ESetRef nopos (EId nopos ("$" ++ name ++ ".prototype"))
+  doit name = ESetRef nopos ("$" ++ name ++ ".prototype")
                 (EUpdateField nopos (EDeref nopos $ EId nopos ("$" ++ name ++ ".prototype"))
                               (EString nopos "constructor")
                               (EDeref nopos $ EId nopos name))
@@ -777,8 +777,8 @@ ecma262Env body =
                 (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
                 [EId nopos "msg"])] $          
 
-  updateObject (EId nopos "$Object.prototype") objectPrototypeValues $
-  updateObject (EId nopos "$Function.prototype") functionPrototypeValues $
+  updateObject "$Object.prototype" objectPrototypeValues $
+  updateObject "$Function.prototype" functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
   ELet nopos [("$Number.prototype", ERef nopos numberPrototype)] $
   ELet nopos [("$Array.prototype", ERef nopos arrayPrototype)] $
@@ -816,6 +816,6 @@ ecma262Env body =
   ELet nopos [("URIError", ERef nopos (jsError "$URIError.prototype"))] $ 
 
   ESeq nopos setConstructors $
-  updateObject (EId nopos "$global") globalValuesAndFunctions $
+  updateObject "$global" globalValuesAndFunctions $
   ELet nopos [("this", EId nopos "$global")] $
   body

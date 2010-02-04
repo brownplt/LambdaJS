@@ -69,24 +69,23 @@ expr wId env e = case e of
   ELet2 a e1 e2 f -> 
     ELet2 a (expr wId env e1) (expr wId env e2) $ \x y -> 
       expr wId (S.insert y (S.insert x env)) (f x y)
-  ESetRef a1 (EId a2 "$global") 
+  ESetRef a1 "$global"
           (EUpdateField a3 (EDeref a4 (EId a5 "$global")) (EString a6 x) e) ->
     EIf a1 (EOp a3 OHasOwnProp [EDeref a4 $ EId a5 wId, EString a6 x])
-        (ESetRef a3 (EId a5 wId) 
+        (ESetRef a3 wId
                      (EUpdateField a3 (EDeref a4 (EId a5 wId)) (EString a6 x) (expr wId env e)))
         -- Preserve the $global[x] = e, so that an outer with can macro-expand
         -- the same way.
-        (ESetRef a3 (EId a5 "$global") 
+        (ESetRef a3 "$global"
                      (EUpdateField a3 (EDeref a4 (EId a5 "$global")) 
                                        (EString a6 x) 
                                        (expr wId env e)))
-  ESetRef a1 (EId a2 x) rhs -> case x `S.member` env of
+  ESetRef a1 x rhs -> case x `S.member` env of
     True -> e
-    False -> EIf a1 (EOp a1 OHasOwnProp [EDeref a1 $ EId a2 wId, EString a2 x])
-     (ESetRef a1 (EId a2 wId) (EUpdateField a1 (EDeref a1 $ EId a2 wId) (EString a2 x) 
+    False -> EIf a1 (EOp a1 OHasOwnProp [EDeref a1 $ EId a1 wId, EString a1 x])
+     (ESetRef a1 wId (EUpdateField a1 (EDeref a1 $ EId a1 wId) (EString a1 x) 
                                       (expr wId env rhs)))
-     (ESetRef a1 (EId a2 x) (expr wId env rhs))
-  ESetRef a e1 e2 -> ESetRef a (expr wId env e1) (expr wId env e2)
+     (ESetRef a1 x (expr wId env rhs))
   ERef a e1 -> ERef a (expr wId env e1)
   EDeref a e1 -> EDeref a (expr wId env e1)
   EGetField a e1 e2 -> EGetField a (expr wId env e1) (expr wId env e2)

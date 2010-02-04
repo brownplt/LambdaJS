@@ -47,7 +47,7 @@ expr e = case e of
     e2' <- expr e2
     e3' <- expr (f x y)
     return (ELet a [(x, e1'), (y, e2')] e3')
-  ESetRef a e1 e2 -> liftM2 (ESetRef a) (expr e1) (expr e2)
+  ESetRef a id e2 -> liftM (ESetRef a id) (expr e2)
   ERef a e1 -> liftM (ERef a) (expr e1)
   EDeref a e1 -> liftM (EDeref a) (expr e1)
   EGetField a e1 e2 -> liftM2 (EGetField a) (expr e1) (expr e2)

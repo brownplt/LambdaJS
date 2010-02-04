@@ -69,7 +69,7 @@ data Expr a
   | EOp a Op [Expr a]
   | EApp a (Expr a) [Expr a]
   | ELet a [(Ident, (Expr a))] (Expr a)
-  | ESetRef a (Expr a) (Expr a)
+  | ESetRef a Ident (Expr a)
   | ERef a (Expr a)
   | EDeref a (Expr a)
   | EGetField a (Expr a) (Expr a)

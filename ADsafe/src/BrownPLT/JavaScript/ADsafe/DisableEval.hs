@@ -43,8 +43,7 @@ typeBind env b =
              ts <- mapM (typeVal env) (map snd fields)
              let t = foldr superType JS ts
              return t
-      BSetRef a v1 v2 -> do
-             typeVal env v1
+      BSetRef a id v2 -> do
              typeVal env v2
              return JS
       BRef a v -> do
@@ -91,7 +90,7 @@ typeBind env b =
 typeExp :: Env -> Exp a -> Either String T
 typeExp env e =
     case e of 
-      ALet _ [(id1, (BSetRef _ (VId a id2) val))] body -> do
+      ALet _ [(id1, (BSetRef _ id2 val))] body -> do
              idtype <- typeVal env val
              typeExp (M.insert id1 idtype (M.insert id2 idtype env)) body
       ALet a binds body -> do
