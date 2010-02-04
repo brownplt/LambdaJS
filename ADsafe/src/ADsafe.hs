@@ -9,12 +9,14 @@ import System.Exit
 
 import BrownPLT.JavaScript.ADsafe.Transformation
 import BrownPLT.JavaScript.ADsafe.DisableBanned
+import BrownPLT.JavaScript.ADsafe.DisableEval
+import BrownPLT.JavaScript.ADsafe.SimplifyIf
 import BrownPLT.JavaScript.Parser ( parseScriptFromString )
 import BrownPLT.JavaScript.Semantics.Desugar ( desugar )
 import BrownPLT.JavaScript.Semantics.ECMAEnvironment ( ecma262Env )
-import BrownPLT.JavaScript.Semantics.PrettyPrint ( pretty )
+import BrownPLT.JavaScript.Semantics.PrettyPrint ( pretty, prettyANF )
 import BrownPLT.JavaScript.Semantics.Syntax
-
+import BrownPLT.JavaScript.Semantics.ANF
 
 
 desugarMain opts = do
@@ -32,6 +34,21 @@ desugarMain opts = do
       putStrLn (show err)
       exitFailure
 
+desugarANF opts = do
+  env <- return $ case opts of 
+                    [] -> ecma262Env
+                    [NoEnv] -> id
+                    otherwise -> fail "spurious command line args"
+  str <- getContents
+  case parseScriptFromString "<stdin>" str of
+    Right script -> do
+      putStrLn (prettyANF (ifReduce (exprToANF (desugar script env))))
+      exitSuccess
+    Left err -> do
+      putStrLn (show err)
+      exitFailure
+
+
 adsafeDesugar script env =
   let core1 = desugar script env
       core2 = flattenSeqs core1
@@ -44,7 +61,7 @@ typeCheckMain opts = do
     Right script -> do
       let core = adsafeDesugar script id
         in do
-          putStrLn $ show $ isTypeable core
+          putStrLn $ show $ isEvalTypeable (exprToANF core)
     Left err -> do
       putStrLn (show err)
       exitFailure
@@ -56,6 +73,7 @@ data Flag
 options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
+  , Option [] ["anf"] (NoArg (Action desugarANF)) "desugar JavaScript"
   , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
   , Option [] ["type-check"] (NoArg (Action typeCheckMain)) "typecheck ADsafe code"
   ]

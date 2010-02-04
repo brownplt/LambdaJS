@@ -63,11 +63,10 @@ toANFMany :: Data a => [(Expr a)]
           -> ([Value a] -> M (Exp a))
           -> M (Exp a)
 toANFMany [] k = k []
-toANFMany (e:es) k = toANF e (\v -> do
-                                x <- newVar
-                                rest <- toANFMany es (\xs -> k ((VId (label e) x):xs))
-                                return (ALet (label e) [(x, (BValue (label e) v))]
-                                             rest))
+toANFMany (e:es) k = 
+    toANF e (\v -> do
+               rest <- toANFMany es (\xs -> k (v:xs))
+               return rest)
 
 
 toANF :: Data a => Expr a
