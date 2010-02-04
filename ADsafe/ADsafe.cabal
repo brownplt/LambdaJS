@@ -22,7 +22,7 @@ Library
     containers >= 0.1,
     syb >= 0.1,
     WebBits >= 2.1,
-    LambdaJS >= 1.0,
+    LambdaJS >= 1.1,
     parsec >= 2.1.0.0 && < 3
   ghc-options:
     -fwarn-incomplete-patterns
@@ -41,7 +41,7 @@ Executable adsafe
     containers >= 0.1,
     syb >= 0.1,
     WebBits >= 2.1,
-    LambdaJS >= 1.0,
+    LambdaJS >= 1.1,
     parsec >= 2.1.0.0 && < 3
   ghc-options:
     -fwarn-incomplete-patterns

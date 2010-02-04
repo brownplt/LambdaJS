@@ -89,7 +89,7 @@ typeCheck e = case e of
     typeCheck e2
     return JS
   ESetRef _ e1 e2 -> do
-    typeCheck e1
+    --typeCheck e1
     typeCheck e2
     return JS
   ERef _ e -> do
