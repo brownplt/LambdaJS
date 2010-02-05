@@ -31,7 +31,6 @@ Library
     FlexibleInstances FlexibleContexts GeneralizedNewtypeDeriving
   Exposed-Modules:
     BrownPLT.JavaScript.ADsafe.Transformation
-    BrownPLT.JavaScript.ADsafe.IfSplit
 
 Executable adsafe
   Main-Is: ADsafe.hs
