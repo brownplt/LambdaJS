@@ -8,8 +8,8 @@ import System.Environment
 import System.Exit
 
 import BrownPLT.JavaScript.ADsafe.Transformation
-import BrownPLT.JavaScript.ADsafe.DisableBanned
-import BrownPLT.JavaScript.ADsafe.DisableEval
+import qualified BrownPLT.JavaScript.ADsafe.DisableBanned as B
+import qualified BrownPLT.JavaScript.ADsafe.DisableEval as E
 import BrownPLT.JavaScript.ADsafe.SimplifyIf
 import BrownPLT.JavaScript.Parser ( parseScriptFromString )
 import BrownPLT.JavaScript.Semantics.Desugar ( desugar )
@@ -19,35 +19,24 @@ import BrownPLT.JavaScript.Semantics.Syntax
 import BrownPLT.JavaScript.Semantics.ANF
 
 
-desugarMain opts = do
-  let env = case opts of 
-              []        -> ecma262Env
-              [NoEnv]   -> id
-              otherwise -> fail "spurious command-line arguments"
+desugarMain    opts = mainTemplate pretty opts
+desugarANFMain opts = mainTemplate (prettyANF . adsafeANF) opts
+getCheckMain   opts = mainTemplate B.isTypeable opts
+evalCheckMain  opts = mainTemplate (E.isTypeable . adsafeANF) opts
+
+mainTemplate :: Show a => (ExprPos -> a) -> [Flag] -> IO ()
+mainTemplate fn opts = do
   str <- getContents
   case parseScriptFromString "<stdin>" str of
     Right script -> 
-      let core = adsafeDesugar script env
-        in do putStrLn (pretty core)
+      let env = envForDesugar opts 
+        in do print $ liftJS fn env script
               exitSuccess
     Left err -> do
-      putStrLn (show err)
+      putStrLn $ show err
       exitFailure
 
-desugarANF opts = do
-  env <- return $ case opts of 
-                    [] -> ecma262Env
-                    [NoEnv] -> id
-                    otherwise -> fail "spurious command line args"
-  str <- getContents
-  case parseScriptFromString "<stdin>" str of
-    Right script -> do
-      putStrLn (prettyANF (ifReduce (exprToANF (desugar script env))))
-      exitSuccess
-    Left err -> do
-      putStrLn (show err)
-      exitFailure
-
+liftJS fn env script = fn $ adsafeDesugar script env
 
 adsafeDesugar script env =
   let core1 = desugar script env
@@ -55,16 +44,11 @@ adsafeDesugar script env =
       core3 = rewriteErrors core2
     in core3
 
-typeCheckMain opts = do
-  str <- getContents
-  case parseScriptFromString "<stdin>" str of
-    Right script -> do
-      let core = adsafeDesugar script id
-        in do
-          putStrLn $ show $ isEvalTypeable (exprToANF core)
-    Left err -> do
-      putStrLn (show err)
-      exitFailure
+adsafeANF = ifReduce . exprToANF
+
+envForDesugar :: [Flag] -> ExprPos -> ExprPos
+envForDesugar opts | null [() | NoEnv <- opts] = id
+                   | otherwise                 = ecma262Env
 
 data Flag
   = Action ([Flag] -> IO ())
@@ -72,17 +56,20 @@ data Flag
 
 options :: [OptDescr Flag]
 options =
-  [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
-  , Option [] ["anf"] (NoArg (Action desugarANF)) "desugar JavaScript"
-  , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
-  , Option [] ["type-check"] (NoArg (Action typeCheckMain)) "typecheck ADsafe code"
+  [ Option [] ["desugar"]    (NoArg (Action desugarMain))    "desugar JavaScript"
+  , Option [] ["anf"]        (NoArg (Action desugarANFMain)) "desugar JavaScript into A-normal form"
+  , Option [] ["no-env"]     (NoArg NoEnv)                   "exclude standard environment"
+  , Option [] ["get-check"]  (NoArg (Action getCheckMain))   "get-check ADsafe code"
+  , Option [] ["eval-check"] (NoArg (Action evalCheckMain))  "eval-check ADsafe code"
   ]
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case getOpt RequireOrder options args of
-    ((Action action):opts, [], []) -> action opts
-    otherwise -> do
-      putStrLn "Invalid command-line arguments"
-      exitFailure
+    args <- getArgs
+    case getOpt RequireOrder options args of
+      ((Action action):opts, [], []) -> action opts
+      (_, _, errs) -> do
+        putStrLn (concat errs ++ usageInfo header options)
+        exitFailure
+  where header = "Usage: adsafe [OPTION...]"
+

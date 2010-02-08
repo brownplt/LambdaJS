@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.ADsafe.DisableEval ( isEvalTypeable ) where
+module BrownPLT.JavaScript.ADsafe.DisableEval ( isTypeable ) where
 
 import qualified Data.Map as M
 
@@ -139,5 +139,5 @@ globalEnv =
   , "uRIError", "this", "$makeException"
   ]
 
-isEvalTypeable = typeExp M.empty . addGlobals
-    where addGlobals b = ALet nopos [(x, (BValue nopos (VUndefined nopos))) | x <- globalEnv] b
+isTypeable = typeExp M.empty . addGlobals
+    where addGlobals b = ALet nopos [(x, BValue nopos (VUndefined nopos)) | x <- globalEnv] b
