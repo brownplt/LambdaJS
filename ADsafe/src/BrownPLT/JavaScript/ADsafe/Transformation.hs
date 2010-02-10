@@ -48,5 +48,5 @@ isError (EBreak _ "$return"
                            [ EString _ "TypeError"
                            , EString _ ":CallExpr given non-function"
                            ]))
-                 (ELet1 _ (EId _ "$obj") _)))) = True
+                 (ELet _ [(_, (EId _ "$obj"))] _)))) = True
 isError _ = False
