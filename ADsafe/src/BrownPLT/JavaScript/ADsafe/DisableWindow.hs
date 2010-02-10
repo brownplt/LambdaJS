@@ -11,6 +11,44 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 
 
+{-
+Typechecks adsafe for expressions that allow 'a window expression' to 'escape.'
+
+'A window expression' (types to Window) starts as one of:
+
+(deref $global)
+this
+
+And the type propagates through derefing and setting fields of objects.
+The "this" identifier can type to Safe instead of Window if it passes
+through a check of the form 
+
+if (this === this.window) ...
+
+'Escaping' is defined as:
+
+Being returned,
+Being passed as an argument that isn't the first in the list,
+Being put into an object with update-field,
+Being stored in a reference.
+
+This is really an application of occurrence typing.  There are extra,
+more complicated rules for dealing with checks like
+
+if (this === this.window || ...)
+
+or 
+
+if (this !== this.window)
+
+It could be that these are needlessly complicated, and implementing
+occurrence more generally would accommodate these changes.  I'm not sure
+what proof of soundness for this type system looks like right now, so
+that's the next step.  Writing down this type system results in no less
+than 12 different judgements for IF, so there's room for improvement
+here.
+-}
+
 data RType = RWindow
            | RSafe
              deriving (Show, Ord, Eq)
