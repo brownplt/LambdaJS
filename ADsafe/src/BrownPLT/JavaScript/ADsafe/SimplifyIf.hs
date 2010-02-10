@@ -120,6 +120,13 @@ typeBind env b =
           let xs' = map fst (map (typeVal env) xs)
               (f', t) = typeVal env f in
           (BApp a f' xs', A (AVar allT))
+      BIf a c (AReturn a1 (VBool a2 False)) (AReturn a3 (VBool a4 True)) ->
+          let (c', tc) = typeVal env c
+              rettype = case tc of
+                          A (ATypeIs x t) -> A (ATypeIsNot x t)
+                          A (ATypeIsNot x t) -> A (ATypeIs x t)
+                          otherwise -> single RBool in
+          (BIf a c' (AReturn a1 (VBool a2 False)) (AReturn a3 (VBool a4 True)), rettype)
       BIf a c thn els ->
           let (c', tc) = typeVal env c in
           case tc of 
@@ -137,6 +144,21 @@ typeBind env b =
                       else
                           let (els', t_els) = typeExp env els in
                           (BApp a (VLambda a [] els') [], t_els)
+                  otherwise -> defaultIf env b
+            A (ATypeIsNot x t) -> 
+                let tx = snd (typeVal env (VId a x)) in
+                case tx of
+                  A (AVar [r]) | r == t ->
+                      let (els', t_els) = typeExp env els in
+                      (BApp a (VLambda a [] els') [], t_els)
+                  A (AVar ts) ->
+                      if (S.member t (S.fromList ts)) then
+                          let (thn', t_thn) = typeExp (M.insert x (remove t tx) env) thn
+                              (els', t_els) = typeExp (M.insert x (single t) env) els in
+                          (BIf a c' thn' els', union t_thn t_els)
+                      else
+                          let (thn', t_thn) = typeExp env thn in
+                          (BApp a (VLambda a [] thn') [], t_thn)
                   otherwise -> defaultIf env b
             otherwise -> defaultIf env b
       BOp a op xs -> bop env b
@@ -164,6 +186,7 @@ bop env b =
           let (x', tx) = typeVal env x in
           let rettype = case tx of
                           A (ATypeIs y r) -> A (ATypeIs y r)
+                          A (ATypeIsNot y r) -> A (ATypeIsNot y r)
                           otherwise -> single RBool in
           (BOp a OPrimToBool [x'], rettype)
       BOp a op xs ->
