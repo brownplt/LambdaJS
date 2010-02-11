@@ -149,7 +149,7 @@ typeBind env b =
              ctype <- typeVal env c
              ttype <- 
                  case ctype of 
-                   (ATypeAnd (ATypeIsNot x RWindow)) -> typeExp (M.insert x (AVar RSafe) (M.insert "this" (AVar RSafe) env)) e
+                   (ATypeAnd (ATypeIsNot x RWindow)) -> typeExp (M.insert x (AVar RSafe) (M.insert "this" (AVar RSafe) env)) t
                    (ATypeIsNot x RWindow) -> 
                        typeExp (M.insert "this" (AVar RSafe) env) t
                    otherwise -> typeExp env t
@@ -161,10 +161,9 @@ typeBind env b =
                    otherwise -> typeExp env e
              case (ctype, ttype, etype) of
                (ATypeOr (ATypeIs x1 RWindow), ATypeOr (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIs x2 RWindow))
---               ((ATypeIs x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIs x2 RWindow))
                ((ATypeIs x1 RWindow), (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIs x2 RWindow))
-               ((ATypeIs x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIs x2 RWindow))
-               ((ATypeIsNot x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIs x2 RWindow))
+               ((ATypeIsNot x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIsNot x2 RWindow))
+               ((ATypeIs x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIsNot x2 RWindow))
                ((ATypeIsNot x1 RWindow), (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIs x2 RWindow))
                otherwise ->
                    if S.member (AVar RWindow) (S.fromList [ttype,etype]) then
