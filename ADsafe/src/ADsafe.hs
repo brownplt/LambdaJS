@@ -24,21 +24,24 @@ import BrownPLT.JavaScript.Semantics.RemoveHOAS
 
 desugarMain     opts = mainTemplate pretty opts
 desugarANFMain  opts = mainTemplate (prettyANF . adsafeANF) opts
-getCheckMain    opts = mainTemplate B.isTypeable opts
-evalCheckMain   opts = mainTemplate (E.isTypeable . adsafeANF) opts
-windowCheckMain opts = mainTemplate (W.isTypeable . adsafeANF) opts
+getCheckMain    opts = mainTemplateShow  B.isTypeable opts
+evalCheckMain   opts = mainTemplateShow  (E.isTypeable . adsafeANF) opts
+windowCheckMain opts = mainTemplateShow  (W.isTypeable . adsafeANF) opts
 
-mainTemplate :: Show a => (ExprPos -> a) -> [Flag] -> IO ()
+mainTemplate :: (ExprPos -> String) -> [Flag] -> IO ()
 mainTemplate fn opts = do
   str <- getContents
   case parseScriptFromString "<stdin>" str of
     Right script -> 
       let env = envForDesugar opts 
-        in do print $ liftJS fn env script
+        in do putStrLn $ liftJS fn env script
               exitSuccess
     Left err -> do
       putStrLn $ show err
       exitFailure
+
+mainTemplateShow :: Show a => (ExprPos -> a) -> [Flag] -> IO ()
+mainTemplateShow f = mainTemplate (show . f)
 
 liftJS fn env script = fn $ adsafeDesugar script env
 
