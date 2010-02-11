@@ -2,6 +2,7 @@ module Main ( main ) where
 
 import Data.Map ( Map )
 import qualified Data.Map as M
+import Data.Char ( toLower )
 
 import System.Console.GetOpt
 import System.Environment
@@ -56,16 +57,26 @@ envForDesugar opts | null [() | NoEnv <- opts] = id
 
 data Flag
   = Action ([Flag] -> IO ())
+  | TypeCheck ([Flag] -> IO ())
   | NoEnv
+
+data Checkers
+  = Get
+  | Eval
+  | Window
+
+readChecker = Action . readChecker' . (map toLower)
+  where readChecker' "get"    = getCheckMain
+        readChecker' "eval"   = evalCheckMain
+        readChecker' "window" = windowCheckMain
+        readChecker' _        = undefined
 
 options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"]      (NoArg (Action desugarMain))    "desugar JavaScript"
   , Option [] ["anf"]          (NoArg (Action desugarANFMain)) "desugar JavaScript into A-normal form"
   , Option [] ["no-env"]       (NoArg NoEnv)                   "exclude standard environment"
-  , Option [] ["get-check"]    (NoArg (Action getCheckMain))   "get-check ADsafe code"
-  , Option [] ["eval-check"]   (NoArg (Action evalCheckMain))  "eval-check ADsafe code"
-  , Option [] ["window-check"] (NoArg (Action windowCheckMain)) "window-check ADsafe code"
+  , Option [] ["type-check"]   (ReqArg readChecker "CHECKER")  "run a type checker"
   ]
 
 main :: IO ()
