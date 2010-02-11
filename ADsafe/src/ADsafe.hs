@@ -55,8 +55,8 @@ adsafeDesugar script env =
 adsafeANF = ifReduce . exprToANF
 
 envForDesugar :: [Flag] -> ExprPos -> ExprPos
-envForDesugar opts | null [() | NoEnv <- opts] = id
-                   | otherwise                 = ecma262Env
+envForDesugar opts | null [() | NoEnv <- opts] = ecma262Env
+                   | otherwise                 = id
 
 data Flag
   = Action ([Flag] -> IO ())
