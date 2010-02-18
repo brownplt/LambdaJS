@@ -41,6 +41,7 @@ Library
     BrownPLT.JavaScript.Semantics.AssignableVars
     BrownPLT.JavaScript.Semantics.ANF
     BrownPLT.JavaScript.Analysis.Pure
+    BrownPLT.JavaScript.Analysis.FreeVars
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
@@ -61,4 +62,3 @@ Executable lambdaJS
   Extensions:     
     Generics DeriveDataTypeable Rank2Types FlexibleInstances
     ScopedTypeVariables
-
