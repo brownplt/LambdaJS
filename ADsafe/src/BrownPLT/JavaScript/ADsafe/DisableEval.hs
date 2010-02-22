@@ -7,6 +7,8 @@ import BrownPLT.JavaScript.Semantics.Syntax
 
 import BrownPLT.JavaScript.Semantics.PrettyPrint
 
+import Data.Generics
+
 type Env = M.Map Ident T
 
 data T = JS | Eval deriving (Show, Eq, Ord)
@@ -19,7 +21,7 @@ superType :: T -> T -> T
 superType a b | a==b = a
 superType _ _ = Eval
 
-typeVal :: Env -> Value a -> Either String T
+typeVal :: (Show a, Data a) => Env -> Value a -> Either String T
 typeVal env v = 
     case v of 
       VNumber a n -> return JS
@@ -36,7 +38,7 @@ typeVal env v =
              return JS
       VEval a -> return Eval
 
-typeBind :: Env -> BindExp a -> Either String T
+typeBind :: (Show a, Data a) =>  Env -> BindExp a -> Either String T
 typeBind env b = 
     case b of 
       BObject a fields -> do 
@@ -79,7 +81,7 @@ typeBind env b =
                  ts <- mapM (typeVal env) args
                  if all (\t -> subType t JS) ts then
                      return JS else
-                     fail ("fail -- arguments" ++ (prettyANF (ABind a (BApp a func args))))
+                     fail ("fail -- arguments" ++ (prettyANF (ABind a (BApp a func args))) ++ (show (label b)))
                otherwise -> fail "fail -- bad app"
       BIf a v e1 e2 -> do
           typeVal env v
@@ -87,7 +89,7 @@ typeBind env b =
           typeExp env e2
           return JS
 
-typeExp :: Env -> Exp a -> Either String T
+typeExp :: (Show a, Data a) => Env -> Exp a -> Either String T
 typeExp env e =
     case e of 
       ALet _ [(id1, (BSetRef _ id2 val))] body -> do
@@ -97,10 +99,10 @@ typeExp env e =
              btypes <- mapM (typeBind env) (map snd binds)
              let env' = M.fromList (zip (map fst binds) btypes)
              typeExp (M.union env' env) body
-      ARec a binds body -> do
-             btypes <- mapM (typeVal env) (map snd binds)
-             let env' = M.fromList (zip (map fst binds) btypes)
-             typeExp (M.union env' env) body
+      ASeq a e1 e2 -> do
+             e1type <- typeExp env e1
+             e2type <- typeExp env e2
+             return e2type
       ALabel a lbl e -> do
              typeExp env e
       ABreak a "$return" v -> do

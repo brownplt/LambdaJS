@@ -58,12 +58,14 @@
      (lambda (actuals)
        (if (= (length actuals) (length formals))
            (let* ([extended-env (foldr (λ (x v env) (hash-set env x v)) env formals actuals)])
-             ; Prevent breaks from crossing procedure boundaries
-             (with-handlers
-                 [(exn:λJS-break?
-                   (λ (exn) 
-                     (error 'interp "break crossing a procedure boundary")))]
-               ((interp extended-env) body)))
+             ; Prevent breaks from crossing procedure boundaries (if not a thunk)
+	     (if (> (length actuals) 0)
+		 (with-handlers
+		  [(exn:λJS-break?
+		    (λ (exn) 
+		       (error 'interp "break crossing a procedure boundary")))]
+		  ((interp extended-env) body))
+		 ((interp extended-env) body)))
            (error 'interp "arity-mismatch")))]
     [(? symbol? id)
      (hash-ref env id

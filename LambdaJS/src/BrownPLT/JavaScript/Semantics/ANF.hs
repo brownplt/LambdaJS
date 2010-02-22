@@ -40,7 +40,7 @@ data BindExp a
 
 data Exp a
   = ALet a [(Ident, BindExp a)] (Exp a)
-  | ARec a [(Ident, Value a)] (Exp a)
+  | ASeq a (Exp a) (Exp a)
   | ALabel a Label (Exp a)
   | ABreak a Label (Value a)
   | AThrow a (Value a)
@@ -103,7 +103,7 @@ toANF expr k =
       ELet a binds body -> let names = map fst binds
                                vals = map snd binds in
                            toANFMany vals (\vvals -> do
-                                             ebody <- toANF body (\v -> (k v))
+                                             ebody <- toANF body k
                                              return (ALet a (zip names (map (BValue a) vvals)) ebody))
       ESetRef a id e -> toANF e (\v -> do
                                     x <- newVar
@@ -137,11 +137,10 @@ toANF expr k =
                                                             x <- newVar
                                                             rest <- k (VId a x)
                                                             return (ALet a [(x, (BDeleteField a vobj vname))] rest)))
-      ESeq a e1 rest -> do
-              x <- newVar
-              toANF e1 (\v1 -> do
-                          arest <- toANF rest (\vrest -> k vrest)
-                          return (ALet a [(x, BValue a v1)] arest))
+      ESeq a e rest -> do
+                e' <- toANF e (\v -> return (AReturn a v))
+                rest' <- toANF rest k
+                return (ASeq a e' rest')
       EIf a e1 e2 e3 -> do
               toANF e1 (\v1 -> do
                           x <- newVar
@@ -150,40 +149,43 @@ toANF expr k =
                           e3' <- toANF e3 (\v3 -> return (AReturn a v3))
                           return (ALet a [(x, (BIf a v1 e2' e3'))] rest))
       EWhile a e1 e2 -> do
-              f <- newVar
-              e2' <- toANF e2 (\v2 -> do
-                                 tmp1 <- newVar
-                                 return (ALet a [(tmp1, (BApp a (VId a f) []))] (AReturn a (VId a tmp1))))
-              loopBody <- toANF e1 ( \v1 -> do
-                                       return (ABind a (BIf a v1 e2' (AReturn a (VUndefined a)))))
-              r <- newVar
-              rest <- k (VId a r)
-              return $ ARec a [(f, VLambda a [] loopBody)]
-                         (ALet a [(r, BApp a (VId a f) [])] rest)
+                f <- newVar
+                e2' <- toANF e2 (\v2 -> do
+                                   tmp1 <- newVar
+                                   recfunc <- newVar
+                                   return (ALet a [(recfunc, (BDeref a (VId a f)))]
+                                           (ALet a [(tmp1, (BApp a (VId a recfunc) []))] (AReturn a (VId a tmp1)))))
+                loopBody <- toANF e1 (\v1 -> do
+                                        return (ABind a (BIf a v1 e2' (AReturn a (VUndefined a)))))
+                r <- newVar
+                t <- newVar
+                unused <- newVar
+                func <- newVar
+                rest <- k (VId a r)
+                return $ ALet a [(f, (BRef a (VUndefined a)))]
+                           (ALet a [(t, (BValue a (VLambda a [] loopBody)))]
+                            (ALet a [(unused, (BSetRef a f (VId a t)))]
+                             (ALet a [(func,  (BDeref a (VId a f)))]
+                              (ALet a [(r, BApp a (VId a func) [])] rest))))
       ELabel a l e -> do
-        body <- toANF e (\v -> k v)
-        return (ALabel a l body)
-      EBreak a l e -> 
+                body <- toANF e k
+                return (ALabel a l body)
+      EBreak a l e ->
           toANF e (\v -> return (ABreak a l v))
-      EThrow a e -> toANF e (\v -> return (AThrow a v))
-      ECatch a body func -> toANF func (\vfunc -> do
-                                          vbody <- toANF body (\v -> return (AReturn a v))
-                                          return (ACatch a vbody vfunc))
-      EFinally a body rest -> toANF rest (\vrest -> do
-                                            vbody <- toANF body (\v -> return (AReturn a v))
-                                            return (AFinally a vbody (AReturn a vrest)))
+      EThrow a e ->
+          toANF e (\v -> return (AThrow a v))
+      ECatch a body func -> do
+          body' <- toANF body k
+          toANF func (\vfunc ->
+                          return (ACatch a body' vfunc))
+      EFinally a body rest -> do
+          body' <- toANF body k
+          rest' <- toANF rest (\v -> return (AReturn a v))
+          return (AFinally a body' rest')
       ELet1 a e1 e2 -> return (AReturn (label e1) (VString (label e1) "ELet1 shouldn't be here"))
       ELet2 a e1 e2 e3 -> return (AReturn (label e1) (VString (label e1) "ELet2 shouldn't be here"))
       EEval a ->  k (VEval a)
---  Don't handle these cases -- only will be called after removeHOAS,
---  and shouldn't have eval anyway
--- 
 
---
-
--- ^an expression that calls eval, or a related
--- function.  If EEval becomes the active expression, our model
--- immediately aborts.
 
 exprToANF :: Data a => Expr a -> Exp a
 exprToANF e = evalState (toANF (removeHOAS e) (\v -> (return (AReturn (label e) v)))) 0

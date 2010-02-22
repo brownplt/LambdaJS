@@ -65,6 +65,10 @@ data AType = ASafe
 
 type TEnv = M.Map Ident AType
 
+isWindow :: AType -> Bool
+isWindow (AVar RWindow) = True
+isWindow (AWindowOf x) = True
+
 -- returns the new value and the type for it
 typeVal :: (Show a, Data a) => TEnv -> Value a -> Either String AType
 typeVal env v =
@@ -73,10 +77,10 @@ typeVal env v =
       VString a s -> return (AString s)
       VId a x -> case M.lookup x env of
                    Just t -> return t
-                   Nothing -> fail "unbound id"
+                   Nothing -> fail ("unbound id" ++ ((show x) ++ (show a)))
       VLambda a ids body -> do
           let env' = (M.fromList (map (\x -> if x == "this" then (x, AVar RWindow) else (x, ASafe)) ids))
-          typeExp (M.union env' env) body
+          etype <- typeExp (M.union env' env) body
           return ASafe
       VNumber a n -> return ASafe
       VBool a n -> return ASafe
@@ -91,26 +95,38 @@ typeBind env b =
       BSetRef a loc val -> do
              vtype <- typeVal env val
              case vtype of 
-               (AVar RWindow) -> fail ("Can't store window in a ref: " ++ (show (label b)))
+               (AVar RWindow) -> fail ("Can't store window in a ref: " ++ (show b))
+               (AWindowOf x) -> fail ("Can't store windowOf in a ref: " ++ (show b))
                otherwise -> return vtype
       BRef a val -> do
              typeVal env val
       BDeref a val -> do
              typeVal env val
-      BGetField a (VId _ x) (VString _ "window") -> do 
---             fail "found a window"
-             return (AWindowOf x) -- ANF ftw
+      BGetField a (VId a2 x) (VString _ "window") -> do
+             xtype <- typeVal env (VId a2 x)
+             case xtype of
+               (AVar RWindow) -> return (AWindowOf x)
+               (AWindowOf y) -> return (AWindowOf x)
+               otherwise -> return ASafe
+      BGetField a (VId a2 x) (VString _ _) -> do
+             return ASafe
       BGetField a obj field -> do
-             return ASafe -- we won't ever *store* window, so safe
+        ftype <- typeVal env field
+        otype <- typeVal env obj
+        case otype of -- if it came out of window, we type it as window
+               (AVar RWindow) -> return (AVar RWindow)
+               (AWindowOf x) -> return (AWindowOf x)
+               otherwise -> return ASafe
       BUpdateField a obj field val -> do
              vtype <- typeVal env val
              case vtype of
-               (AVar RWindow) -> fail ("Can't store window in an object")
+               (AVar RWindow) -> fail ("Can't store window in an object" ++ (show b))
+               (AWindowOf x) -> fail ("Can't store windowOf in an object: " ++ (show b))
                otherwise -> return vtype
       BDeleteField a obj field -> do
              return ASafe
       BObject a fields -> do
-             otypes <- mapM (typeVal env) (map snd fields)
+             otypes <- mapM (typeVal env) (map snd (filter (\ (n,f) -> n /= "callee") fields))
              if S.member (AVar RWindow) (S.fromList otypes) then
                  return (AVar RWindow) else
                  return ASafe
@@ -180,26 +196,24 @@ typeExp env e =
              let env' = M.fromList (zip (map fst binds) btypes)
              btype <- typeExp (M.union env' env) body
              return btype
-      ARec a binds body -> do
-             btypes <- 
-                 mapM (\pair -> 
-                           (typeVal (M.insert (fst pair) ASafe env) (snd pair))) 
-                 binds
-             let env' = M.fromList (zip (map fst binds) btypes)
-             btype <- typeExp (M.union env' env) body
-             return btype
+      ASeq a e1 e2 -> do
+             e1type <- typeExp env e1
+             e2type <- typeExp env e2
+             return e2type
       ALabel a lbl body -> do
              btype <- typeExp env body
              return btype
       ABreak a lbl v -> do
-             vtype <- typeVal env v
-             case vtype of
-               (AVar RWindow) -> fail ("Can't break on Window" ++ show e)
-               otherwise -> return vtype
+        vtype <- typeVal env v
+        case vtype of
+          (AVar RWindow) -> fail ("Can't break on Window" ++ show e)
+          (AWindowOf x) -> fail ("Can't break on WindowOf" ++ show e)
+          otherwise -> return vtype
       AThrow a v -> do
              vtype <- typeVal env v
              case vtype of
                (AVar RWindow) -> fail "Can't throw Window"
+               (AWindowOf x) -> fail ("Can't throw WindowOf" ++ show e)
                otherwise -> return vtype
       ACatch a body catch -> do
              btype <- typeExp env body
@@ -215,7 +229,7 @@ typeExp env e =
              typeBind env b
 
 
-globalEnv =
+allEnv = 
   [ "$global", "$Object.prototype", "$Function.prototype", "$Date.prototype"
   , "$Number.prototype", "$Array.prototype", "$Boolean.prototype"
   , "$Error.prototype", "$Boolean.prototype", "$Error.prototype" 
@@ -227,6 +241,8 @@ globalEnv =
   , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
   , "uRIError", "this", "$makeException"
   ]
+
+globalEnv = allEnv -- change to [] if using ECMA environment
 
 
 isTypeable = typeExp M.empty . addGlobals

@@ -10,7 +10,8 @@ import qualified Data.Set as S
 
 data RType = RNumber
            | RObject
-           | RFunction
+           | RFunction -- a javascript function object
+           | RLambda   -- a bona fide lambda expression
            | RString
            | RBool
            | RLocation
@@ -22,6 +23,7 @@ data RType = RNumber
              
 data AType = AString String --constant strings
            | AVar [RType]   --possible variable types for an ident/expr
+--           | ACodeOf Ident  --holds the $code field of something (used to test for functionhood)
            | ATypeOf Ident  --expression holding the type of an ident
            | ATypeIs Ident RType
            | ATypeIsNot Ident RType
@@ -45,6 +47,7 @@ stringType s =
       "object" -> RObject
       "boolean" -> RBool
       "function" -> RFunction
+      "lambda" -> RLambda
       "location" -> RLocation
       otherwise -> RAny
       -- don't check for eval here -- we don't check with typeof
@@ -97,9 +100,14 @@ typeBind env b =
       BRef a v ->
           let (v', t) = typeVal env v in
           (BRef a v', R RLocation)
+      BDeref a (VId a2 "$global") ->
+          (BDeref a (VId a2 "$global"), single RObject)
       BDeref a v ->
           let (v', t) = typeVal env v in
           (BDeref a v', A (AVar allT))  -- we know nothing about refs
+--      BGetField a v1 (VString a2 "prototype") ->
+--          let (v1', t1) = typeVal env v1 in
+--          (BGetField a v1' (VString a2 "prototype"), single RObject) -- we know nothing about objects
       BGetField a v1 v2 ->
           let (v1', t1) = typeVal env v1
               (v2', t2) = typeVal env v2 in
@@ -135,7 +143,7 @@ typeBind env b =
                 case tx of
                   A (AVar [r]) | r == t ->
                       let (thn', t_thn) = typeExp env thn in
-                      (BApp a (VLambda a [] thn') [], t_thn)
+                      ((BIf a (VBool a True) thn' (AReturn a (VString a "$unreachable"))), t_thn)
                   A (AVar ts) ->
                       if (S.member t (S.fromList ts)) then
                           let (thn', t_thn) = typeExp (M.insert x (single t) env) thn
@@ -143,14 +151,14 @@ typeBind env b =
                           (BIf a c' thn' els', union t_thn t_els)
                       else
                           let (els', t_els) = typeExp env els in
-                          (BApp a (VLambda a [] els') [], t_els)
+                          ((BIf a (VBool a False) (AReturn a (VString a "$unreachable")) els'), t_els)
                   otherwise -> defaultIf env b
             A (ATypeIsNot x t) -> 
                 let tx = snd (typeVal env (VId a x)) in
                 case tx of
                   A (AVar [r]) | r == t ->
                       let (els', t_els) = typeExp env els in
-                      (BApp a (VLambda a [] els') [], t_els)
+                      ((BIf a (VBool a False) (AReturn a (VString a "$unreachable")) els'), t_els)
                   A (AVar ts) ->
                       if (S.member t (S.fromList ts)) then
                           let (thn', t_thn) = typeExp (M.insert x (remove t tx) env) thn
@@ -158,7 +166,7 @@ typeBind env b =
                           (BIf a c' thn' els', union t_thn t_els)
                       else
                           let (thn', t_thn) = typeExp env thn in
-                          (BApp a (VLambda a [] thn') [], t_thn)
+                          ((BIf a (VBool a True) thn' (AReturn a (VString a "$unreachable"))), t_thn)
                   otherwise -> defaultIf env b
             otherwise -> defaultIf env b
       BOp a op xs -> bop env b
@@ -230,28 +238,23 @@ typeExp env e =
                       env (zip (map fst binds) ts)
               (body', tbody) = typeExp env' body in
           (ALet a binds' body', tbody)
-      ARec a binds body ->
-          let pairs = map (typeVal env) (map snd binds)
-              (xs, ts) = (map fst pairs, map snd pairs)
-              binds' = zip (map fst binds) (xs)
-              env' = foldl (\acc_env pair -> 
-                                 M.insert (fst pair) (snd pair) acc_env)
-                      env (zip (map fst binds) ts)
-              (body', tbody) = typeExp env' body in
-          (ARec a binds' body', tbody)
+      ASeq a e1 e2 ->
+          let (e1', e1type) = typeExp env e1
+              (e2', e2type) = typeExp env e2 in
+          (ASeq a e1' e2', e2type)
       ALabel a lbl body ->
           let (body', tbody) = typeExp env body in
           (ALabel a lbl body', tbody)
+      ACatch a body catch ->
+          let (body', tbody) = typeExp env body
+              (catch', tcatch) = typeVal env catch in
+          (ACatch a body' catch', union tbody tcatch)
       ABreak a lbl v ->
           let (v', tv) = typeVal env v in
           (ABreak a lbl v', tv)
       AThrow a v ->
           let (v', tv) = typeVal env v in
           (AThrow a v', tv)
-      ACatch a body catch ->
-          let (body', tbody) = typeExp env body
-              (catch', tcatch) = typeVal env catch in
-          (ACatch a body' catch', union tbody tcatch)
       AFinally a body final ->
           let (body', tbody) = typeExp env body
               (final', tfinal) = typeExp env final in
@@ -263,6 +266,18 @@ typeExp env e =
           let (b', tb) = typeBind env b in
           (ABind a b', tb)
                                  
+globalEnv =
+  [ "$global", "$Object.prototype", "$Function.prototype", "$Date.prototype"
+  , "$Number.prototype", "$Array.prototype", "$Boolean.prototype"
+  , "$Error.prototype", "$Boolean.prototype", "$Error.prototype" 
+  , "$ConversionError.prototype", "$RangeError.prototype" 
+  , "$ReferenceError.prototype", "$SyntaxError.prototype" 
+  , "$TypeError.prototype", "$URIError.prototype", "Object", "Function"
+  , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
+  , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
+  , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
+  , "uRIError", "this", "$makeException"
+  ]
           
 ifReduce :: Data a => Exp a -> Exp a                       
-ifReduce e = fst (typeExp M.empty e)
+ifReduce e = fst (typeExp (M.fromList (map (\x -> (x, single RLocation)) globalEnv))  e)

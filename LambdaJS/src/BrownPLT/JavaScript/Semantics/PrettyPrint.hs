@@ -185,7 +185,7 @@ expr e = case e of
     d2 <- expr e2
     return $ parens $ text "while" $+$ d1 $+$ d2
 
-valueANF :: Value a -> M Doc
+valueANF :: (Show a) => Value a -> M Doc
 valueANF v = 
     case v of
       VNumber a n -> return $ text (showNumber n)
@@ -200,7 +200,7 @@ valueANF v =
              return $ parens $ text "lambda" <+> parens (hsep $ map text xs) $+$ d
       VEval a -> return $ text "eval-semantic-bomb"
 
-bindANF :: BindExp a -> M Doc
+bindANF :: Show a => BindExp a -> M Doc
 bindANF b =
     case b of 
       BObject a ps -> do
@@ -244,7 +244,7 @@ bindANF b =
              return $ parens $ text "if" <+> d1 $+$ d2 $+$ d3
       BValue a v -> valueANF v
 
-expANF :: Exp a -> M Doc
+expANF :: Show a => Exp a -> M Doc
 expANF e = 
     case e of
       ALet a binds e -> do
@@ -254,21 +254,18 @@ expANF e =
              dBinds <- mapM f binds
              d <- expANF e
              return $ parens $ text "let" $+$ parens (vcat dBinds) $+$ d
-      ARec a binds e -> do
-             let f (x,e') = do
-                          d' <- valueANF e'
-                          return $ parens $ text x <+> d'
-             dBinds <- mapM f binds
-             d <- expANF e
-             return $ parens $ text "let" $+$ parens (vcat dBinds) $+$ d
+      ASeq a e1 e2 -> do
+             d1 <- expANF e1
+             d2 <- expANF e2
+             return $ parens $ text "begin" $+$ d1 $+$ d2
       ALabel a lbl e -> do
              d <- expANF e
              return $ parens $ text "label" <+> text lbl $+$ d
-      ABreak a lbl e -> do
-             d <- valueANF e
+      ABreak a lbl v -> do
+             d <- valueANF v
              return $ parens $ text "break" <+> text lbl $+$ d
-      AThrow a e -> do
-             d <- valueANF e
+      AThrow a v -> do
+             d <- valueANF v
              return $ parens $ text "throw" <+> d
       ACatch a e1 e2 -> do
              d1 <- expANF e1
@@ -292,8 +289,8 @@ pretty e = render (renderExpr e)
 renderExpr :: ExprPos -> Doc
 renderExpr e = evalState (expr e) 0
 
-prettyANF :: Exp a -> String
+prettyANF :: Show a => Exp a -> String
 prettyANF e = render (renderExpANF e)
 
-renderExpANF :: Exp a -> Doc
+renderExpANF :: Show a => Exp a -> Doc
 renderExpANF e = evalState (expANF e) 0
