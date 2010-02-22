@@ -1,131 +1,210 @@
 module BrownPLT.JavaScript.ADsafe.DisableEval ( isTypeable ) where
 
+import Control.Monad.Error
+import Control.Monad.Reader
+import Control.Monad.State
+
+import Data.Map ( Map )
 import qualified Data.Map as M
+import Data.Set ( Set )
+import qualified Data.Set as S
 
-import BrownPLT.JavaScript.Semantics.ANF
 import BrownPLT.JavaScript.Semantics.Syntax
+import BrownPLT.JavaScript.Semantics.RemoveHOAS ( removeHOAS )
+import BrownPLT.JavaScript.Semantics.PrettyPrint ( pretty )
 
-import BrownPLT.JavaScript.Semantics.PrettyPrint
+import Text.ParserCombinators.Parsec.Pos ( sourceLine, sourceColumn )
 
-import Data.Generics
+-- Types
+--
+-- Note that
+-- 
+--   Obj [] <: Safe     and     Safe <: Obj []
+--
+-- so they're the same type.
+--
+data T = Safe | JS | Ref T | Obj [Ident]
+  deriving ( Show, Eq, Ord )
 
-type Env = M.Map Ident T
+-- Environment that maps identifiers to types.
+--
+type IdentEnv = Map Ident T
 
-data T = JS | Eval deriving (Show, Eq, Ord)
+-- Environment that maps identifiers to types.
+-- 
+type LabelEnv = Map Label T
+
+-- Typer Monad. Keeps track of identifier environment, and threading label
+-- state.
+--
+newtype Typer a = Typer (StateT LabelEnv (ReaderT IdentEnv (Either String)) a)
+  deriving ( Functor, Monad, MonadState LabelEnv, MonadReader IdentEnv, MonadError String )
 
 subType :: T -> T -> Bool
-subType Eval JS = False
-subType _ _ = True
+subType x y | x == y = True
+
+subType (Ref x)  (Ref y) = subType x y
+subType (Ref x)  y       = subType x y
+subType x        (Ref y) = subType x y
+
+subType (Obj []) y        = subType Safe y
+subType y        (Obj []) = subType y    Safe
+subType (Obj xs) (Obj ys) = (S.fromList xs)
+                                        `S.isSubsetOf` (S.fromList ys)
+subType Safe     (Obj ys) = False
+
+subType JS _    = False
+subType _  JS   = True
+subType _  Safe = True
+
+isSafe :: T -> Bool
+isSafe Safe     = True
+isSafe (Obj []) = True
+isSafe _        = False
 
 superType :: T -> T -> T
-superType a b | a==b = a
-superType _ _ = Eval
+superType t1 t2 
+    | subType t1 t2 = t2
+    | subType t2 t1 = t1
+    | otherwise     = error "omg incomparable"
 
-typeVal :: (Show a, Data a) => Env -> Value a -> Either String T
-typeVal env v = 
-    case v of 
-      VNumber a n -> return JS
-      VString a s -> return JS
-      VBool a b -> return JS
-      VUndefined a -> return JS
-      VNull a -> return JS
-      VId a x -> case M.lookup x env of
-                   Just t -> return t
-                   Nothing -> error ("unbound id: " ++ x)
-      VLambda a args body -> do
-             let env' = M.fromList (map (\x -> (x,Eval)) args)
-             typeExp (M.union env' env) body
-             return JS
-      VEval a -> return Eval
+varLookup :: Ident -> Typer (Maybe T)
+varLookup = asks . M.lookup
 
-typeBind :: (Show a, Data a) =>  Env -> BindExp a -> Either String T
-typeBind env b = 
-    case b of 
-      BObject a fields -> do 
-             ts <- mapM (typeVal env) (map snd fields)
-             let t = foldr superType JS ts
-             return t
-      BSetRef a id v2 -> do
-             typeVal env v2
-             return JS
-      BRef a v -> do
-             typeVal env v
-      BDeref a v -> do
-             val <- typeVal env v
-             return val
-      BGetField _ v1 (VString _ "eval") -> return Eval
-      BGetField _ v1 (VId _ "eval") -> return Eval
-      BGetField _ v1 (VString _ "$code") -> do
-             typeVal env v1
-      BGetField _ v1 v2 -> do
-             typeVal env v1
-             typeVal env v2
-             return JS
-      BUpdateField a v1 v2 v3 -> do
-             typeVal env v1
-             typeVal env v2
-             typeVal env v3
-             return JS
-      BDeleteField a v1 v2 -> do
-             typeVal env v1
-             typeVal env v2
-      BValue a v -> do
-             typeVal env v
-      BOp a o vals -> do
-             mapM (typeVal env) vals
-             return JS
-      BApp a func args -> do
-             ftype <- typeVal env func
-             case ftype of
-               JS -> do 
-                 ts <- mapM (typeVal env) args
-                 if all (\t -> subType t JS) ts then
-                     return JS else
-                     fail ("fail -- arguments" ++ (prettyANF (ABind a (BApp a func args))) ++ (show (label b)))
-               otherwise -> fail "fail -- bad app"
-      BIf a v e1 e2 -> do
-          typeVal env v
-          typeExp env e1
-          typeExp env e2
-          return JS
+-- Lookup a variable in the type environment.
+varLookup' :: Ident -> Typer T
+varLookup' x 
+    | x == "Function" = return JS
+    | x `elem` globalEnv = return $
+        Obj ["eval", "constructor", "$proto", "prototype"]
+    | otherwise = do
+        result <- varLookup x
+        case result of
+            Just t  -> return t
+            Nothing -> throwError $ "unbound identifier: " ++ x
 
-typeExp :: (Show a, Data a) => Env -> Exp a -> Either String T
-typeExp env e =
-    case e of 
-      ALet _ [(id1, (BSetRef _ id2 val))] body -> do
-             idtype <- typeVal env val
-             typeExp (M.insert id1 idtype (M.insert id2 idtype env)) body
-      ALet a binds body -> do
-             btypes <- mapM (typeBind env) (map snd binds)
-             let env' = M.fromList (zip (map fst binds) btypes)
-             typeExp (M.union env' env) body
-      ASeq a e1 e2 -> do
-             e1type <- typeExp env e1
-             e2type <- typeExp env e2
-             return e2type
-      ALabel a lbl e -> do
-             typeExp env e
-      ABreak a "$return" v -> do
-             t <- typeVal env v
-             case t of 
-               JS -> return JS
-               otherwise -> fail "Bad return"
-      ABreak _ lbl v -> do
-             typeVal env v
-             return JS
-      AThrow a v -> do
-             typeVal env v
-      ACatch a e v -> do
-             typeExp env e
-             typeVal env v
-      AFinally a e1 e2 -> do
-             typeExp env e1
-             typeExp env e2
-      AReturn a v -> do
-             typeVal env v
-      ABind a b -> do
-             typeBind env b
-
+typeCheck :: Expr SourcePos -> Typer T
+typeCheck e = case e of
+  ENumber _ _  -> return Safe
+  EString _ _  -> return Safe
+  EUndefined _ -> return Safe
+  EBool _ _    -> return Safe
+  ENull _      -> return Safe
+  ELambda a xs e ->
+    let env' = M.fromList [(x, Safe) | x <- xs]
+      in local (M.union env') $ typeCheck e
+  EId _ x -> varLookup' x
+  ELet _ binds body -> do
+    boundTypes <- mapM typeCheck (map snd binds)
+    let env' = M.fromList $ zip (map fst binds) boundTypes
+    local (M.union env') $ typeCheck body
+  EDeref _ e -> do
+    -- The result of (deref e) should have the same type as e
+    t <- typeCheck e
+    case t of
+        Ref tr    -> return tr
+        otherwise -> return t
+  EDeleteField _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    return t1
+  ESetRef a id e2 -> do
+    t1 <- varLookup' id
+    t2 <- typeCheck e2
+    when (not $ subType t2 t1)
+        (throwError $ "bad assignment of " ++ (show id) ++ " to\n\n" ++ (pretty e2) ++ "\nat " ++ (show a) ++ "\n" ++ (show t2) ++ " !<: " ++ (show t1))
+    return t1
+  ERef _ e -> do
+    -- The result of (ref e) should have the same type as e
+    t <- typeCheck e
+    return $ Ref t
+  EApp _ fe es -> do
+    t  <- typeCheck fe
+    ts <- mapM typeCheck es
+    case subType t Safe of
+      True  -> case all (\t -> subType t Safe) ts of
+                True  -> return Safe
+                False -> throwError "unsafe application (arguments)"
+      False -> throwError "unsafe application"
+  ESeq _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    return t2
+  EOp _ _ es -> do
+    ts <- mapM typeCheck es
+    return Safe
+  EIf _ c e2 e3 -> do
+    t1 <- typeCheck c
+    t2 <- typeCheck e2
+    t3 <- typeCheck e3
+    return $ superType t2 t3
+  EObject _ props -> do
+    ts <- mapM (\(n, e) -> do { t <- typeCheck e; return (n, t) }) props
+    return $ Obj [n | (n, t) <- ts, not (subType t Safe)]
+  EGetField _ e1 e2 -> do
+    tobj <- typeCheck e1
+    tfld <- typeCheck e2
+    case tobj of
+      Obj ids ->
+        case e2 of
+          (EString _ id) -> if id `elem` ids
+                              then return JS
+                              else return Safe
+          _              -> return JS
+      -- Handle Safe, Ref T, and JS
+      otherwise -> if subType tobj Safe
+                     then return Safe
+                     else return JS
+  EUpdateField _ e1 e2 e3 -> do
+    tobj <- typeCheck e1
+    tfld <- typeCheck e2
+    trhs <- typeCheck e3
+    case tobj of
+      Obj ids -> 
+        case e2 of
+          (EString _ id) -> if id `elem` ids
+                              then return tobj
+                              else if isSafe trhs then return tobj else return $ Obj (id:ids)
+          _              -> if isSafe trhs then return tobj else return JS
+      otherwise -> if subType tobj Safe
+                     then if subType trhs tobj then return tobj else return trhs
+                     else return JS
+  ELabel _ lbl e -> do
+    te  <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.delete lbl labs
+          return $ superType te tl
+        Nothing -> return te
+  EBreak _ lbl e -> do
+    te <- typeCheck e
+    labs <- get
+    let mtl = M.lookup lbl labs
+    case mtl of
+        Just tl -> do
+          put $ M.insert lbl (superType tl te) labs
+          return te
+        Nothing -> do
+          put $ M.insert lbl te labs
+          return te
+  EThrow _ e -> typeCheck e >> return Safe
+  EWhile _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    return Safe
+  ECatch _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    return Safe
+  EFinally _ e1 e2 -> do
+    t1 <- typeCheck e1
+    t2 <- typeCheck e2
+    return Safe
+  EEval _ -> return JS
+  ELet1{} -> error "unexpected ELet1 (removeHOAS not called?)"
+  ELet2{} -> error "unexpected ELet2 (removeHOAS not called?)"
 
 
 globalEnv =
@@ -138,8 +217,10 @@ globalEnv =
   , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
   , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
   , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
-  , "uRIError", "this", "$makeException"
+  , "uRIError", "this", "$makeException", "decodeURI"
   ]
 
-isTypeable = typeExp M.empty . addGlobals
-    where addGlobals b = ALet nopos [(x, BValue nopos (VUndefined nopos)) | x <- globalEnv] b
+isTypeable = runTyper . typeCheck . addGlobals . removeHOAS
+  where addGlobals b = ELet nopos [(x, EUndefined nopos) | x <- globalEnv] b
+        runTyper (Typer m) = runReaderT (evalStateT m M.empty) M.empty
+
