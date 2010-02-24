@@ -4,13 +4,19 @@ module BrownPLT.JavaScript.Semantics.ANF
     , Exp(..)
     , toANF  
     , exprToANF
-    )
-where
+    ) where
+
+import Control.Monad.State
+
+import Data.Maybe ( fromJust, maybe )
+import Data.Either ( either )
+
+import System.IO.Unsafe
 
 import BrownPLT.JavaScript.Semantics.Syntax
-import Control.Monad.State
 import BrownPLT.JavaScript.Semantics.Prelude
 import BrownPLT.JavaScript.Semantics.RemoveHOAS
+
 
 data Value a
   = VNumber a Double
@@ -52,6 +58,60 @@ data Exp a
 
 type M a = State Int a
 
+-- Is the LambdaJS expression a value? Note that object literals are not 
+-- considered values.
+--
+isValue :: Data a => Expr a -> Bool
+isValue = maybe False (const True) . exprToValue
+
+-- Turn an Expr into a 'Value' if possible.
+--
+exprToValue :: Data a => Expr a -> Maybe (M (Value a))
+exprToValue e = case e of
+  ENumber a d -> jr $ VNumber a d
+  EString a s -> jr $ VString a s
+  EBool   a b -> jr $ VBool   a b
+
+  EUndefined a -> jr $ VUndefined a
+  ENull      a -> jr $ VNull a
+
+  ELambda a as b -> Just $ do
+    b' <- toANF b $ \v -> return $ AReturn a v
+    return $ VLambda a as b'
+  
+  EId a id  -> jr $ VId a id
+  EEval a   -> jr $ VEval a
+  otherwise -> Nothing
+  where jr = Just . return 
+
+-- Is the LambdaJS expression a BindExpr without additional ANFing?
+--
+isBindExp :: Data a => Expr a -> Bool
+isBindExp = maybe False (const True) . exprToBindExp
+
+-- Is an expression an object literal whose fields are all values?
+--
+-- TODO: This code could benefit from some applicative style.
+--
+exprToBindExp :: Data a => Expr a -> Maybe (M (BindExp a))
+exprToBindExp e = case e of
+  ERef    a e' ->
+    case exprToValue e' of
+      Just mv -> Just $ do { v <- mv; return $ BRef a v }
+      Nothing -> Nothing
+  EDeref  a e' ->
+    case exprToValue e' of
+      Just mv -> Just $ do { v <- mv; return $ BDeref a v }
+      Nothing -> Nothing
+  EObject a fs -> 
+    case mapM (exprToValue . snd) fs of
+      Just vs -> Just $ do
+        vs' <- sequence vs
+        return $ BObject a (zip (map fst fs) vs')
+      Nothing -> Nothing
+  otherwise -> Nothing
+
+
 newVar :: M Ident
 newVar = do
   n <- get
@@ -59,7 +119,8 @@ newVar = do
   return ("$anf" ++ show n)
 
 
-toANFMany :: Data a => [(Expr a)]
+toANFMany :: Data a
+          => [Expr a]
           -> ([Value a] -> M (Exp a))
           -> M (Exp a)
 toANFMany [] k = k []
@@ -68,15 +129,28 @@ toANFMany (e:es) k =
                rest <- toANFMany es (\xs -> k (v:xs))
                return rest)
 
+toANFManyForLet :: Data a
+                => [Expr a]
+                -> ([Either (Value a) (BindExp a)] -> M (Exp a))
+                -> M (Exp a)
+toANFManyForLet []     k = k []
+toANFManyForLet (e:es) k
+  | isBindExp e = do
+      b <- fromJust $ exprToBindExp e
+      toANFManyForLet es $ \xs -> k $ (Right b):xs
+  | otherwise = do
+      toANF e $ \v -> toANFManyForLet es $ \xs -> k $ (Left v):xs
 
-toANF :: Data a => Expr a
+
+toANF :: Data a
+      => Expr a
       -> (Value a -> M (Exp a))
       -> M (Exp a)
-toANF expr k = 
+toANF expr k =
     case expr of
-      ENumber a x -> k (VNumber a x)
+      ENumber a d -> k (VNumber a d)
       EString a s -> k (VString a s)
-      EBool a b -> k (VBool a b)
+      EBool   a b -> k (VBool a b)
       EUndefined a -> k (VUndefined a)
       ENull a -> k (VNull a)
       EId a x -> k (VId a x)
@@ -100,11 +174,12 @@ toANF expr k =
                                                           rest <- k (VId a x)
                                                           return (ALet a [(x, BApp a vfunc vargs)] rest)))
       -- Is this bad nesting of lets?  I'm not sure...
-      ELet a binds body -> let names = map fst binds
-                               vals = map snd binds in
-                           toANFMany vals (\vvals -> do
-                                             ebody <- toANF body k
-                                             return (ALet a (zip names (map (BValue a) vvals)) ebody))
+      ELet a binds body -> 
+        let (names, vals) = unzip binds
+          in toANFManyForLet vals $ \vals' -> do
+               let vals'' = map (either (BValue a) id) vals'
+               body' <- toANF body k
+               return $ ALet a (zip names vals'') body'
       ESetRef a id e -> toANF e (\v -> do
                                     x <- newVar
                                     rest <- k (VId a x)
