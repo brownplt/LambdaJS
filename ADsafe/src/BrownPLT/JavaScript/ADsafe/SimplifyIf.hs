@@ -31,9 +31,10 @@ data AType = AString String --constant strings
 
 data T = A AType
        | R RType
+         deriving (Show, Ord, Eq)
 
 allT = [RNumber, RObject, RString, RFunction, 
-        RBool, RLocation, RNull, RUndefined]
+        RBool, RLocation, RNull, RUndefined, RLambda]
 
 type TEnv = M.Map Ident T
 
@@ -68,7 +69,7 @@ remove r (A (AVar ts)) =
 remove r t = t
 
 -- returns the new value and the type for it
-typeVal :: Data a => TEnv -> Value a -> (Value a, T)
+typeVal :: (Data a, Show a) => TEnv -> Value a -> (Value a, T)
 typeVal env v =
     case v of
       VString a s -> (v, A (AString s))
@@ -85,7 +86,7 @@ typeVal env v =
       VEval a -> (v, single REval)
 
 
-typeBind :: Data a => TEnv -> BindExp a -> (BindExp a, T)
+typeBind :: (Data a, Show a) => TEnv -> BindExp a -> (BindExp a, T)
 typeBind env b =
     case b of
       BObject a fields -> 
@@ -95,8 +96,8 @@ typeBind env b =
                              (map snd fields)))) in
           (BObject a newfields, R RObject)
       BSetRef a id v2 ->
-          let (v2', t2) = typeVal env v2 
-            in (BSetRef a id v2', t2)
+          let (v2', t2) = typeVal env v2 in
+          (BSetRef a id v2', t2)
       BRef a v ->
           let (v', t) = typeVal env v in
           (BRef a v', R RLocation)
@@ -143,7 +144,7 @@ typeBind env b =
                 case tx of
                   A (AVar [r]) | r == t ->
                       let (thn', t_thn) = typeExp env thn in
-                      ((BIf a (VBool a True) thn' (AReturn a (VString a "$unreachable"))), t_thn)
+                      (BIf a c' thn' (AReturn a (VString a ((show b) ++ (show tx) ++ (show tc)))), t_thn)
                   A (AVar ts) ->
                       if (S.member t (S.fromList ts)) then
                           let (thn', t_thn) = typeExp (M.insert x (single t) env) thn
@@ -151,14 +152,14 @@ typeBind env b =
                           (BIf a c' thn' els', union t_thn t_els)
                       else
                           let (els', t_els) = typeExp env els in
-                          ((BIf a (VBool a False) (AReturn a (VString a "$unreachable")) els'), t_els)
+                          (BIf a c' (AReturn a (VString a ((show b) ++ (show tx) ++ (show tc)))) els', t_els)
                   otherwise -> defaultIf env b
             A (ATypeIsNot x t) -> 
                 let tx = snd (typeVal env (VId a x)) in
                 case tx of
                   A (AVar [r]) | r == t ->
                       let (els', t_els) = typeExp env els in
-                      ((BIf a (VBool a False) (AReturn a (VString a "$unreachable")) els'), t_els)
+                      ((BIf a c' (AReturn a (VString a "$unreachable")) els'), t_els)
                   A (AVar ts) ->
                       if (S.member t (S.fromList ts)) then
                           let (thn', t_thn) = typeExp (M.insert x (remove t tx) env) thn
@@ -166,12 +167,12 @@ typeBind env b =
                           (BIf a c' thn' els', union t_thn t_els)
                       else
                           let (thn', t_thn) = typeExp env thn in
-                          ((BIf a (VBool a True) thn' (AReturn a (VString a "$unreachable"))), t_thn)
+                          ((BIf a c' thn' (AReturn a (VString a "$unreachable"))), t_thn)
                   otherwise -> defaultIf env b
             otherwise -> defaultIf env b
       BOp a op xs -> bop env b
 
-bop :: Data a => TEnv -> BindExp a -> (BindExp a, T)
+bop :: (Data a, Show a) => TEnv -> BindExp a -> (BindExp a, T)
 bop env b =
     case b of
       BOp a OStrictEq [x, y] ->
@@ -200,23 +201,66 @@ bop env b =
       BOp a op xs ->
           let xs' = map fst (map (typeVal env) xs)
               ts = map snd (map (typeVal env) xs) in
-          (BOp a op xs', single (opType op))
-      otherwise -> (b, single RUndefined)
+          (BOp a op xs', A (AVar (opType op)))
+      otherwise -> (BValue (label b) (VString (label b) "bop not given BOp"), single RUndefined)
 
 
-opType :: Op -> RType
+opType :: Op -> [RType]
 opType op = 
-    if S.member op (S.fromList [ONumPlus, OMul, ODiv, OMod, OSub, OLt, OBAnd, OBOr, OBXOr, OBNot, OLShift, OSpRShift, OZfRShift, OPrimToNum, OMathExp, OMathLog, OMathCos, OMathSin, OMathAbs, OMathPow, OStrLen, OToInteger, OToInt32, OToUInt32])
-    then
-        RNumber
-    else
-        if S.member op (S.fromList [OStrPlus, OStrSplitRegExp, OStrSplitStrExp])
-        then
-            RString
-        else
-            RBool
-      
-defaultIf :: Data a => TEnv -> BindExp a -> (BindExp a, T)
+    case op of
+      ONumPlus -> [RNumber]
+      OMul -> [RNumber]
+      ODiv -> [RNumber]
+      OMod -> [RNumber]
+      OSub -> [RNumber]
+      OBAnd -> [RNumber]
+      OBOr -> [RNumber]
+      OBXOr -> [RNumber]
+      OBNot -> [RNumber]
+      OLShift -> [RNumber]
+      OSpRShift -> [RNumber]
+      OZfRShift -> [RNumber]
+      OPrimToNum -> [RNumber]
+      OToInteger -> [RNumber]
+      OToInt32 -> [RNumber]
+      OToUInt32 -> [RNumber]
+      OMathExp -> [RNumber]
+      OMathLog -> [RNumber]
+      OMathCos -> [RNumber]
+      OMathSin -> [RNumber]
+      OMathAbs -> [RNumber]
+      OMathPow -> [RNumber]
+      OStrLen -> [RNumber]
+
+      OPrint -> [RUndefined]
+
+      OLt -> [RBool]
+      OStrictEq -> [RBool]
+      OAbstractEq -> [RBool]
+      OPrimToBool -> [RBool]
+      OIsPrim -> [RBool]
+      OHasOwnProp -> [RBool]
+      OStrContains -> [RBool]
+      OStrStartsWith -> [RBool]
+      OObjIterHasNext -> [RBool]
+      OObjCanDelete -> [RBool]
+
+      -- Arrays
+      OStrSplitRegExp -> [RObject]
+      OStrSplitStrExp -> [RObject]
+      ORegExpMatch -> [RObject,RNull,RUndefined]
+      ORegExpQuote -> [RObject]
+
+      OStrPlus -> [RString]
+      OStrLt -> [RString]
+      OTypeof -> [RString]
+      OSurfaceTypeof -> [RString]
+      OPrimToStr -> [RString]
+      -- Keys of objects are strings
+      OObjIterNext -> [RString]
+      OObjIterKey -> [RString]
+
+defaultIf :: (Data a, Show a) => TEnv -> BindExp a -> (BindExp a, T)
 defaultIf env b = 
     case b of
       BIf a c t e ->
@@ -224,9 +268,9 @@ defaultIf env b =
               (t', tt) = typeExp env t
               (e', te) = typeExp env e in
           (BIf a c' t' e', union tt te)
-      otherwise -> (b, single RUndefined) -- this should never happen
+      otherwise -> ((BValue (label b) (VString (label b) "defaultIf not passed an if expression")), single RUndefined) -- this should never happen
 
-typeExp :: Data a => TEnv -> Exp a -> (Exp a, T)
+typeExp :: (Data a, Show a) => TEnv -> Exp a -> (Exp a, T)
 typeExp env e = 
     case e of 
       ALet a binds body ->
@@ -248,7 +292,7 @@ typeExp env e =
       ACatch a body catch ->
           let (body', tbody) = typeExp env body
               (catch', tcatch) = typeVal env catch in
-          (ACatch a body' catch', union tbody tcatch)
+          (ACatch a body' catch', A (AVar allT))
       ABreak a lbl v ->
           let (v', tv) = typeVal env v in
           (ABreak a lbl v', tv)
@@ -276,8 +320,8 @@ globalEnv =
   , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
   , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
   , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
-  , "uRIError", "this", "$makeException"
+  , "URIError", "this", "$makeException"
   ]
           
-ifReduce :: Data a => Exp a -> Exp a                       
+ifReduce :: (Data a, Show a) => Exp a -> Exp a                       
 ifReduce e = fst (typeExp (M.fromList (map (\x -> (x, single RLocation)) globalEnv))  e)
