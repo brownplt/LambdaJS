@@ -77,7 +77,12 @@ typeVal env v =
                        Just t -> t
                        Nothing -> A (AVar allT))
       VLambda a ids body ->
-          (VLambda a ids (fst (typeExp env body)), 
+          let env' = 
+                  (M.fromList 
+                   (map (\x -> if x == "this"
+                               then (x, single RLocation)
+                               else (x, (A (AVar allT)))) ids)) in
+          (VLambda a ids (fst (typeExp (M.union env' env) body)), 
            single RFunction)
       VNumber a n -> (v, single RNumber)
       VBool a n -> (v, single RBool)
@@ -144,7 +149,7 @@ typeBind env b =
                 case tx of
                   A (AVar [r]) | r == t ->
                       let (thn', t_thn) = typeExp env thn in
-                      (BIf a c' thn' (AReturn a (VString a ((show b) ++ (show tx) ++ (show tc)))), t_thn)
+                      (BIf a c' thn' (AReturn a (VString a "$unreachable")), t_thn)
                   A (AVar ts) ->
                       if (S.member t (S.fromList ts)) then
                           let (thn', t_thn) = typeExp (M.insert x (single t) env) thn
@@ -152,7 +157,7 @@ typeBind env b =
                           (BIf a c' thn' els', union t_thn t_els)
                       else
                           let (els', t_els) = typeExp env els in
-                          (BIf a c' (AReturn a (VString a ((show b) ++ (show tx) ++ (show tc)))) els', t_els)
+                          (BIf a c' (AReturn a (VString a "$unreachable")) els', t_els)
                   otherwise -> defaultIf env b
             A (ATypeIsNot x t) -> 
                 let tx = snd (typeVal env (VId a x)) in
@@ -175,6 +180,8 @@ typeBind env b =
 bop :: (Data a, Show a) => TEnv -> BindExp a -> (BindExp a, T)
 bop env b =
     case b of
+      BOp a OStrictEq [VId _ x, VNull _] ->
+          (b, (A (ATypeIs x RNull)))
       BOp a OStrictEq [x, y] ->
           let (x', tx) = typeVal env x
               (y', ty) = typeVal env y in
