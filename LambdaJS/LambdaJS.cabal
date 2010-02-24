@@ -28,6 +28,7 @@ Library
     -fwarn-incomplete-patterns
   Extensions:     
     Generics DeriveDataTypeable Rank2Types FlexibleInstances
+    ScopedTypeVariables
   Exposed-Modules:
     BrownPLT.JavaScript.Semantics.Desugar
     BrownPLT.JavaScript.Semantics.ECMAEnvironment
@@ -39,6 +40,7 @@ Library
     BrownPLT.JavaScript.Semantics.RemoveHOAS
     BrownPLT.JavaScript.Semantics.AssignableVars
     BrownPLT.JavaScript.Semantics.ANF
+    BrownPLT.JavaScript.Analysis.Pure
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
@@ -58,4 +60,5 @@ Executable lambdaJS
     -fwarn-incomplete-patterns
   Extensions:     
     Generics DeriveDataTypeable Rank2Types FlexibleInstances
+    ScopedTypeVariables
 
