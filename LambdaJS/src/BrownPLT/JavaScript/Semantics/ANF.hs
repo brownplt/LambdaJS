@@ -212,10 +212,12 @@ toANF expr k =
                                                             x <- newVar
                                                             rest <- k (VId a x)
                                                             return (ALet a [(x, (BDeleteField a vobj vname))] rest)))
-      ESeq a e rest -> do
-                e' <- toANF e (\v -> return (AReturn a v))
-                rest' <- toANF rest k
-                return (ASeq a e' rest')
+      ESeq a e1 e2 -> do
+        e1' <- toANF e1 $ \v -> return (AReturn a v)
+        e2' <- toANF e2 k
+        case e1' of
+          AReturn _ _ -> return e2'
+          otherwise   -> return $ ASeq a e1' e2'
       EIf a e1 e2 e3 -> do
               toANF e1 (\v1 -> do
                           x <- newVar
