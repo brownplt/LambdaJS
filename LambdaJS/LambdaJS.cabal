@@ -37,6 +37,7 @@ Library
     BrownPLT.JavaScript.Semantics.PrettyPrint
     BrownPLT.JavaScript.Semantics.LocalVars
     BrownPLT.JavaScript.Semantics.Syntax
+    BrownPLT.JavaScript.Semantics.Parser
     BrownPLT.JavaScript.Semantics.RemoveHOAS
     BrownPLT.JavaScript.Semantics.AssignableVars
     BrownPLT.JavaScript.Semantics.ANF
