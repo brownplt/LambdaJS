@@ -116,7 +116,7 @@ toANF expr k =
       ENull a -> k $ Left $ VNull a
       EId a x -> k $ Left $ VId a x
       ELambda a args body -> do
-        abody <- toANFValue body $ \v -> return $ AReturn a v
+        abody <- toANF body $ \vb -> return $ toExp' a vb
         k $ Left $ VLambda a args abody
       EObject a binds -> 
         let (ns, fs) = unzip binds
