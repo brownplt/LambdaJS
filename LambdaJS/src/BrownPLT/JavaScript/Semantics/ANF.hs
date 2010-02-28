@@ -58,6 +58,25 @@ data Exp a
 
 type M a = State Int a
 
+type ANFKont a  = Either (Value a) (BindExp a) -> M (Exp a)
+type ANFsKont a = [Either (Value a) (BindExp a)] -> M (Exp a)
+type ValKont a  = Value a -> M (Exp a)
+type ValsKont a = [Value a] -> M (Exp a)
+
+newVar :: M Ident
+newVar = do
+  n <- get
+  put (n + 1)
+  return ("$anf" ++ show n)
+
+toANFManyForLet []     k = k []
+toANFManyForLet (e:es) k
+  | isBindExp e = do
+      b <- fromJust $ exprToBindExp e
+      toANFManyForLet es $ \xs -> k $ (Right b):xs
+  | otherwise = do
+      toANFValue e $ \v -> toANFManyForLet es $ \xs -> k $ (Left v):xs
+
 -- Is the LambdaJS expression a value? Note that object literals are not 
 -- considered values.
 --
@@ -76,7 +95,7 @@ exprToValue e = case e of
   ENull      a -> jr $ VNull a
 
   ELambda a as b -> Just $ do
-    b' <- toANF b $ \v -> return $ AReturn a v
+    b' <- toANF b $ \v -> return $ toExp' a v
     return $ VLambda a as b'
   
   EId a id  -> jr $ VId a id
@@ -112,16 +131,33 @@ exprToBindExp e = case e of
   otherwise -> Nothing
 
 
-newVar :: M Ident
-newVar = do
-  n <- get
-  put (n + 1)
-  return ("$anf" ++ show n)
+toExp (Left  v) = AReturn (label v) v
+toExp (Right b) = ABind   (label b) b
 
+toExp' :: a -> Either (Value a) (BindExp a) -> Exp a
+toExp' a e = either (AReturn a) (ABind a) e
+
+toValue :: Data a => Either (Value a) (BindExp a) -> ValKont a -> M (Exp a)
+toValue (Left  v) k = k v
+toValue (Right b) k = do
+    x <- newVar 
+    e <- k $ VId (label b) x
+    return $ ALet (label b) [(x, b)] e
+
+toValues :: Data a => [Either (Value a) (BindExp a)] -> ValsKont a -> M (Exp a)
+toValues []     k = k []
+toValues (v:vs) k =
+  toValue v $ \v' -> toValues vs $ \vs' -> k (v':vs')
+
+toANFValue :: Data a => Expr a -> ValKont a -> M (Exp a)
+toANFValue e k = toANF e $ \e' -> toValue e' k
+
+toANFValues :: Data a => [Expr a] -> ValsKont a -> M (Exp a)
+toANFValues es k = toANFMany es $ \es' -> toValues es' k
 
 toANFMany :: Data a
           => [Expr a]
-          -> ([Value a] -> M (Exp a))
+          -> ANFsKont a
           -> M (Exp a)
 toANFMany [] k = k []
 toANFMany (e:es) k = 
@@ -129,101 +165,89 @@ toANFMany (e:es) k =
                rest <- toANFMany es (\xs -> k (v:xs))
                return rest)
 
-toANFManyForLet :: Data a
-                => [Expr a]
-                -> ([Either (Value a) (BindExp a)] -> M (Exp a))
-                -> M (Exp a)
-toANFManyForLet []     k = k []
-toANFManyForLet (e:es) k
-  | isBindExp e = do
-      b <- fromJust $ exprToBindExp e
-      toANFManyForLet es $ \xs -> k $ (Right b):xs
-  | otherwise = do
-      toANF e $ \v -> toANFManyForLet es $ \xs -> k $ (Left v):xs
-
-
 toANF :: Data a
       => Expr a
-      -> (Value a -> M (Exp a))
+      -> ANFKont a
       -> M (Exp a)
 toANF expr k =
     case expr of
-      ENumber a d -> k (VNumber a d)
-      EString a s -> k (VString a s)
-      EBool   a b -> k (VBool a b)
-      EUndefined a -> k (VUndefined a)
-      ENull a -> k (VNull a)
-      EId a x -> k (VId a x)
+      ENumber a d -> k $ Left (VNumber a d)
+      EString a s -> k $ Left (VString a s)
+      EBool   a b -> k $ Left (VBool a b)
+      EUndefined a -> k $ Left (VUndefined a)
+      ENull a -> k $ Left (VNull a)
+      EId a x -> k $ Left (VId a x)
       ELambda a args body -> do
-                abody <- (toANF body (\v -> return (AReturn a v)))
-                k (VLambda a args abody)
+                abody <- (toANFValue body (\v -> return (AReturn a v)))
+                k $ Left (VLambda a args abody)
       EObject a binds -> let names = map fst binds
                              fields = map snd binds in
                          do
-                           toANFMany fields (\vfields -> do
+                           toANFValues fields (\vfields -> do
                                                x <- newVar
-                                               rest <- k (VId a x)
+                                               rest <- k $ Left (VId a x)
                                                return (ALet a [(x, BObject a (zip names vfields))] rest))
-      EOp a op args -> toANFMany args (\vargs -> do
+      EOp a op args -> toANFValues args (\vargs -> do
                                            x <- newVar 
-                                           rest <- k (VId a x)
+                                           rest <- k $ Left (VId a x)
                                            return (ALet a [(x, BOp a op vargs)] rest))
-      EApp a func args -> toANF func (\vfunc ->
-                                        toANFMany args (\vargs -> do
+      EApp a func args -> toANFValue func (\vfunc ->
+                                        toANFValues args (\vargs -> do
                                                           x <- newVar
-                                                          rest <- k (VId a x)
+                                                          rest <- k $ Left (VId a x)
                                                           return (ALet a [(x, BApp a vfunc vargs)] rest)))
       -- Is this bad nesting of lets?  I'm not sure...
       ELet a binds body -> 
-        let (names, vals) = unzip binds
-          in toANFManyForLet vals $ \vals' -> do
-               let vals'' = map (either (BValue a) id) vals'
-               body' <- toANF body k
-               return $ ALet a (zip names vals'') body'
-      ESetRef a id e -> toANF e (\v -> do
+        let (ns, bs) = unzip binds
+          in do
+            body' <- toANF body k
+            toANFManyForLet bs $ \vs -> do
+              let vs' = map (either (BValue a) id) vs
+              return $ ALet a (zip ns vs') body'
+      ESetRef a id e -> toANFValue e (\v -> do
                                     x <- newVar
-                                    rest <- k (VId a x)
+                                    rest <- k $ Left (VId a x)
                                     return (ALet a [(x, (BSetRef a id v))] rest))
-      ERef a e -> toANF e (\v -> do 
+      ERef a e -> toANFValue e (\v -> do 
                              x <- newVar
-                             rest <- k (VId a x)
+                             rest <- k $ Left (VId a x)
                              return (ALet a [(x, (BRef a v))] rest))
-      EDeref a e -> toANF e (\v -> do 
+      EDeref a e -> toANFValue e (\v -> do 
                                x <- newVar 
-                               rest <- k (VId a x)
+                               rest <- k $ Left (VId a x)
                                return (ALet a [(x, (BDeref a v))] rest))
-      EGetField a obj name -> toANF obj (\vobj -> 
-                                         toANF name (\vname -> do
+      EGetField a obj name -> toANFValue obj (\vobj -> 
+                                         toANFValue name (\vname -> do
                                                        x <- newVar
-                                                       rest <- k (VId a x)
+                                                       rest <- k $ Left (VId a x)
                                                        return (ALet a [(x, (BGetField a vobj vname))] rest)))
-      EUpdateField a obj name val -> toANF
+      EUpdateField a obj name val -> toANFValue
                                      obj
-                                     (\vobj -> toANF 
+                                     (\vobj -> toANFValue
                                                name 
-                                               (\vname -> toANF
+                                               (\vname -> toANFValue
                                                           val
                                                           (\vval -> do
                                                              x <- newVar
-                                                             rest <- k (VId a x)
+                                                             rest <- k $ Left (VId a x)
                                                              return (ALet a [(x, (BUpdateField a vobj vname vval))] rest))))
-      EDeleteField a obj name -> toANF obj (\vobj -> 
-                                            toANF name (\vname -> do
+      EDeleteField a obj name -> toANFValue obj (\vobj -> 
+                                            toANFValue name (\vname -> do
                                                             x <- newVar
-                                                            rest <- k (VId a x)
+                                                            rest <- k $ Left (VId a x)
                                                             return (ALet a [(x, (BDeleteField a vobj vname))] rest)))
       ESeq a e1 e2 -> do
-        e1' <- toANF e1 $ \v -> return (AReturn a v)
+        e1' <- toANFValue e1 $ \v -> return (AReturn a v)
         e2' <- toANF e2 k
         case e1' of
           AReturn _ _ -> return e2'
           otherwise   -> return $ ASeq a e1' e2'
       EIf a e1 e2 e3 -> do
-              toANF e1 (\v1 -> do
+              toANFValue e1 (\v1 -> do
                           x <- newVar
-                          rest <- k (VId a x)
-                          e2' <- toANF e2 (\v2 -> return (AReturn a v2))
-                          e3' <- toANF e3 (\v3 -> return (AReturn a v3))
+                          rest <- k $ Left (VId a x)
+                          e2' <- toANFValue e2 (\v2 -> return (AReturn a v2))
+                          e3' <- toANFValue e3 (\v3 -> return (AReturn a v3))
                           return (ALet a [(x, (BIf a v1 e2' e3'))] rest))
       EWhile a e1 e2 -> do
                 f <- newVar
@@ -232,13 +256,13 @@ toANF expr k =
                                    recfunc <- newVar
                                    return (ALet a [(recfunc, (BDeref a (VId a f)))]
                                            (ALet a [(tmp1, (BApp a (VId a recfunc) []))] (AReturn a (VId a tmp1)))))
-                loopBody <- toANF e1 (\v1 -> do
+                loopBody <- toANFValue e1 (\v1 -> do
                                         return (ABind a (BIf a v1 e2' (AReturn a (VUndefined a)))))
                 r <- newVar
                 t <- newVar
                 unused <- newVar
                 func <- newVar
-                rest <- k (VId a r)
+                rest <- k $ Left (VId a r)
                 return $ ALet a [(f, (BRef a (VUndefined a)))]
                            (ALet a [(t, (BValue a (VLambda a [] loopBody)))]
                             (ALet a [(unused, (BSetRef a f (VId a t)))]
@@ -248,21 +272,21 @@ toANF expr k =
                 body <- toANF e k
                 return (ALabel a l body)
       EBreak a l e ->
-          toANF e (\v -> return (ABreak a l v))
+          toANFValue e (\v -> return (ABreak a l v))
       EThrow a e ->
-          toANF e (\v -> return (AThrow a v))
+          toANFValue e (\v -> return (AThrow a v))
       ECatch a body func -> do
           body' <- toANF body k
-          toANF func (\vfunc ->
+          toANFValue func (\vfunc ->
                           return (ACatch a body' vfunc))
       EFinally a body rest -> do
           body' <- toANF body k
-          rest' <- toANF rest (\v -> return (AReturn a v))
+          rest' <- toANFValue rest (\v -> return (AReturn a v))
           return (AFinally a body' rest')
       ELet1 a e1 e2 -> return (AReturn (label e1) (VString (label e1) "ELet1 shouldn't be here"))
       ELet2 a e1 e2 e3 -> return (AReturn (label e1) (VString (label e1) "ELet2 shouldn't be here"))
-      EEval a ->  k (VEval a)
+      EEval a ->  k $ Left (VEval a)
 
 
 exprToANF :: Data a => Expr a -> Exp a
-exprToANF e = evalState (toANF (removeHOAS e) (\v -> (return (AReturn (label e) v)))) 0
+exprToANF e = (`evalState` 0) $ toANFValue (removeHOAS e) (\v -> (return (AReturn (label e) v)))
