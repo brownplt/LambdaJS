@@ -69,68 +69,6 @@ newVar = do
   put (n + 1)
   return ("$anf" ++ show n)
 
-toANFManyForLet []     k = k []
-toANFManyForLet (e:es) k
-  | isBindExp e = do
-      b <- fromJust $ exprToBindExp e
-      toANFManyForLet es $ \xs -> k $ (Right b):xs
-  | otherwise = do
-      toANFValue e $ \v -> toANFManyForLet es $ \xs -> k $ (Left v):xs
-
--- Is the LambdaJS expression a value? Note that object literals are not 
--- considered values.
---
-isValue :: Data a => Expr a -> Bool
-isValue = maybe False (const True) . exprToValue
-
--- Turn an Expr into a 'Value' if possible.
---
-exprToValue :: Data a => Expr a -> Maybe (M (Value a))
-exprToValue e = case e of
-  ENumber a d -> jr $ VNumber a d
-  EString a s -> jr $ VString a s
-  EBool   a b -> jr $ VBool   a b
-
-  EUndefined a -> jr $ VUndefined a
-  ENull      a -> jr $ VNull a
-
-  ELambda a as b -> Just $ do
-    b' <- toANF b $ \v -> return $ toExp' a v
-    return $ VLambda a as b'
-  
-  EId a id  -> jr $ VId a id
-  EEval a   -> jr $ VEval a
-  otherwise -> Nothing
-  where jr = Just . return 
-
--- Is the LambdaJS expression a BindExpr without additional ANFing?
---
-isBindExp :: Data a => Expr a -> Bool
-isBindExp = maybe False (const True) . exprToBindExp
-
--- Is an expression an object literal whose fields are all values?
---
--- TODO: This code could benefit from some applicative style.
---
-exprToBindExp :: Data a => Expr a -> Maybe (M (BindExp a))
-exprToBindExp e = case e of
-  ERef    a e' ->
-    case exprToValue e' of
-      Just mv -> Just $ do { v <- mv; return $ BRef a v }
-      Nothing -> Nothing
-  EDeref  a e' ->
-    case exprToValue e' of
-      Just mv -> Just $ do { v <- mv; return $ BDeref a v }
-      Nothing -> Nothing
-  EObject a fs -> 
-    case mapM (exprToValue . snd) fs of
-      Just vs -> Just $ do
-        vs' <- sequence vs
-        return $ BObject a (zip (map fst fs) vs')
-      Nothing -> Nothing
-  otherwise -> Nothing
-
-
 toExp (Left  v) = AReturn (label v) v
 toExp (Right b) = ABind   (label b) b
 
@@ -171,22 +109,18 @@ toANF :: Data a
       -> M (Exp a)
 toANF expr k =
     case expr of
-      ENumber a d -> k $ Left (VNumber a d)
-      EString a s -> k $ Left (VString a s)
-      EBool   a b -> k $ Left (VBool a b)
-      EUndefined a -> k $ Left (VUndefined a)
-      ENull a -> k $ Left (VNull a)
-      EId a x -> k $ Left (VId a x)
+      ENumber a d -> k $ Left $ VNumber a d
+      EString a s -> k $ Left $ VString a s
+      EBool   a b -> k $ Left $ VBool a b
+      EUndefined a -> k $ Left $ VUndefined a
+      ENull a -> k $ Left $ VNull a
+      EId a x -> k $ Left $ VId a x
       ELambda a args body -> do
-                abody <- (toANFValue body (\v -> return (AReturn a v)))
-                k $ Left (VLambda a args abody)
-      EObject a binds -> let names = map fst binds
-                             fields = map snd binds in
-                         do
-                           toANFValues fields (\vfields -> do
-                                               x <- newVar
-                                               rest <- k $ Left (VId a x)
-                                               return (ALet a [(x, BObject a (zip names vfields))] rest))
+        abody <- toANFValue body $ \v -> return $ AReturn a v
+        k $ Left $ VLambda a args abody
+      EObject a binds -> 
+        let (ns, fs) = unzip binds
+          in toANFValues fs $ \vs -> k $ Right $ BObject a (zip ns vs)
       EOp a op args -> toANFValues args (\vargs -> do
                                            x <- newVar 
                                            rest <- k $ Left (VId a x)
@@ -201,21 +135,18 @@ toANF expr k =
         let (ns, bs) = unzip binds
           in do
             body' <- toANF body k
-            toANFManyForLet bs $ \vs -> do
-              let vs' = map (either (BValue a) id) vs
-              return $ ALet a (zip ns vs') body'
+            toANFMany bs $ \vbs -> do
+              let vbs' = map (either (BValue a) id) vbs
+              return $ ALet a (zip ns vbs') body'
       ESetRef a id e -> toANFValue e (\v -> do
                                     x <- newVar
                                     rest <- k $ Left (VId a x)
                                     return (ALet a [(x, (BSetRef a id v))] rest))
-      ERef a e -> toANFValue e (\v -> do 
-                             x <- newVar
-                             rest <- k $ Left (VId a x)
-                             return (ALet a [(x, (BRef a v))] rest))
-      EDeref a e -> toANFValue e (\v -> do 
-                               x <- newVar 
-                               rest <- k $ Left (VId a x)
-                               return (ALet a [(x, (BDeref a v))] rest))
+
+      ERef a e ->
+        toANFValue e $ \v -> k $ Right $ BRef a v
+      EDeref a e ->
+        toANFValue e $ \v -> k $ Right $ BDeref a v
       EGetField a obj name -> toANFValue obj (\vobj -> 
                                          toANFValue name (\vname -> do
                                                        x <- newVar
