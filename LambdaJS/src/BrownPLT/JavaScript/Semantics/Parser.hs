@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.Parser where
+module BrownPLT.JavaScript.Semantics.Parser ( expr ) where
 
 import Control.Applicative ( Applicative(..), (<$>))
 import Control.Monad
@@ -40,6 +40,8 @@ keywords = S.fromList $
     ]
 
 lstring = lexeme . string
+lchar   = lexeme . char
+
 ident' = lexeme $ do 
     c <- letter <|> oneOf "$_"
     cs <- many (alphaNum <|> oneOf "$_.")
@@ -48,17 +50,17 @@ ident' = lexeme $ do
 ident = do
   id <- ident'
   if id `S.member` keywords
-    then fail $ id ++ " is a reserved keyword"
+    then fail $ "'" ++ id ++ "' is a reserved keyword"
     else return id
 
 op :: CharParser st Op 
-op = (lexeme $ (string "+" >> return ONumPlus)
+op = (lexeme $ (char '+' >> return ONumPlus)
   <|> (try $ string "string-+" >> return OStrPlus)
-  <|> (string "*" >> return OMul)
-  <|> (string "/" >> return ODiv)
-  <|> (string "%" >> return OMod)
-  <|> (string "-" >> return OSub)
-  <|> (try $ string "<" >> return OLt)
+  <|> (char '*' >> return OMul)
+  <|> (char '/' >> return ODiv)
+  <|> (char '%' >> return OMod)
+  <|> (char '-' >> return OSub)
+  <|> (try $ char '<' >> return OLt)
   <|> (try $ string "string-<" >> return OStrLt)
   <|> (try $ string "===" >> return OStrictEq)
   <|> (string "==" >> return OAbstractEq)
@@ -71,10 +73,10 @@ op = (lexeme $ (string "+" >> return ONumPlus)
   <|> (try $ string "to-integer" >> return OToInteger)
   <|> (try $ string "to-int-32" >> return OToInt32)
   <|> (try $ string "to-uint-32" >> return OToUInt32)
-  <|> (string "&" >> return OBAnd)
+  <|> (char '&' >> return OBAnd)
   <|> (string "\\|" >> return OBOr)
-  <|> (string "^" >> return OBXOr)
-  <|> (string "~" >> return OBNot)
+  <|> (char '^' >> return OBXOr)
+  <|> (char '~' >> return OBNot)
   <|> (try $ string "<<" >> return OLShift)
   <|> (try $ string ">>" >> return OSpRShift)
   <|> (string ">>>" >> return OZfRShift)
@@ -109,8 +111,8 @@ value = ((ENumber <@> float)
         <|> (EEval      <@-> lstring "eval-semantic-bomb"))
         <?> "value"
   where 
-    bool = string "#" >> 
-            ((lstring "t" >> return True) <|> (lstring "f" >> return False))
+    bool = char '#' >> 
+            ((lchar 't' >> return True) <|> (lchar 'f' >> return False))
 
 args = parens (many ident)
 
