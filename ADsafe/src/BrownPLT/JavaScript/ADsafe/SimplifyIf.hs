@@ -23,7 +23,6 @@ data RType = RNumber
              
 data AType = AString String --constant strings
            | AVar [RType]   --possible variable types for an ident/expr
---           | ACodeOf Ident  --holds the $code field of something (used to test for functionhood)
            | ATypeOf Ident  --expression holding the type of an ident
            | ATypeIs Ident RType
            | ATypeIsNot Ident RType
@@ -111,9 +110,6 @@ typeBind env b =
       BDeref a v ->
           let (v', t) = typeVal env v in
           (BDeref a v', A (AVar allT))  -- we know nothing about refs
---      BGetField a v1 (VString a2 "prototype") ->
---          let (v1', t1) = typeVal env v1 in
---          (BGetField a v1' (VString a2 "prototype"), single RObject) -- we know nothing about objects
       BGetField a v1 v2 ->
           let (v1', t1) = typeVal env v1
               (v2', t2) = typeVal env v2 in
@@ -280,6 +276,62 @@ defaultIf env b =
 typeExp :: (Data a, Show a) => TEnv -> Exp a -> (Exp a, T)
 typeExp env e = 
     case e of 
+      {-
+        Dead code elimination for:
+
+        (let [(x (if c "$unreachable" e))] x) => e
+
+       -}
+      ALet a1 [(x, BIf a2 c thn els)] (AReturn a3 (VId a4 y)) | x==y ->
+           let (if', tif) = typeBind env (BIf a2 c thn els) in
+           case if' of
+             BIf a' c (AReturn _ (VString _ "$unreachable")) els ->
+                 typeExp env els
+             BIf a' c thn (AReturn _ (VString _ "$unreachable")) ->
+                 typeExp env thn
+             otherwise ->
+                 (ABind a1 if', tif)
+      {-
+        If you have something like
+
+        (let [(x (if c "$unreachable" v))] body)
+        
+        this is equivalent to 
+        
+        (let [(x v)] body), as long as v is a value or bind exp
+
+       -}
+      ALet a1 [(x, BIf a2 c thn els)] body ->
+          let (if', tif) = typeBind env (BIf a2 c thn els) in
+          case if' of
+            BIf a' c (AReturn _ (VString _ "$unreachable")) (AReturn a2 v) ->
+                 let (v', tv) = typeVal env v
+                     (body', tbody) = typeExp (M.insert x tv env) body in
+                 (ALet a1 [(x, (BValue a2 v'))] body', tbody)
+            BIf a' c (AReturn a2 v) (AReturn _ (VString _ "$unreachable")) ->
+                 let (v', tv) = typeVal env v
+                     (body', tbody) = typeExp (M.insert x tv env) body in
+                 (ALet a1 [(x, (BValue a2 v'))] body', tbody)
+            BIf a' c (AReturn _ (VString _ "$unreachable")) (ABind a2 b) ->
+                 let (b', tb) = typeBind env b
+                     (body', tbody) = typeExp (M.insert x tb env) body in
+                 (ALet a1 [(x, b')] body', tbody)
+            BIf a' c (ABind a2 b) (AReturn _ (VString _ "$unreachable")) ->
+                 let (b', tb) = typeBind env b
+                     (body', tbody) = typeExp (M.insert x tb env) body in
+                 (ALet a1 [(x, b')] body', tbody)
+            otherwise -> 
+                let (body', tbody) = typeExp (M.insert x tif env) body in
+                (ALet a1 [(x, if')] body', tbody)
+      {-
+        Performs the follwing simplification:
+        
+        (let ([x e]) x) => e
+        
+       -}
+      ALet a1 [(x, b)] (AReturn a2 (VId a3 y)) | x==y ->
+           let (b', tb) = typeBind env b in
+           (ABind a1 b', tb)
       ALet a binds body ->
           let pairs = map (typeBind env) (map snd binds)
               (xs, ts) = (map fst pairs, map snd pairs)
