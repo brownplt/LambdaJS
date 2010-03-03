@@ -154,10 +154,11 @@ toANF expr k =
           otherwise   -> return $ ASeq a e1' e2'
       EIf a e1 e2 e3 -> do
         toANFValue e1 $ \v1 -> do
+          x <- newVar
+          rest <- k $ Left (VId a x)
           e2' <- toANF e2 $ \vb2 -> return $ toExp' a vb2
           e3' <- toANF e3 $ \vb3 -> return $ toExp' a vb3
-          k $ Right $ BIf a v1 e2' e3'
-      -- This is a hot mess
+          return (ALet a [(x, (BIf a v1 e2' e3'))] rest)
       EWhile a e1 e2 -> do
                 f <- newVar
                 e2' <- toANF e2 (\v2 -> do
