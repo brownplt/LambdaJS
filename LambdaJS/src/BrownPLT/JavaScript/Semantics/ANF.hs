@@ -93,20 +93,12 @@ toANFValue e k = toANF e $ \e' -> toValue e' k
 toANFValues :: Data a => [Expr a] -> ValsKont a -> M (Exp a)
 toANFValues es k = toANFMany es $ \es' -> toValues es' k
 
-toANFMany :: Data a
-          => [Expr a]
-          -> ANFsKont a
-          -> M (Exp a)
+toANFMany :: Data a => [Expr a] -> ANFsKont a -> M (Exp a)
 toANFMany [] k = k []
 toANFMany (e:es) k = 
-    toANF e (\v -> do
-               rest <- toANFMany es (\xs -> k (v:xs))
-               return rest)
+    toANF e $ \v -> toANFMany es $ \xs -> k (v:xs)
 
-toANF :: Data a
-      => Expr a
-      -> ANFKont a
-      -> M (Exp a)
+toANF :: Data a => Expr a -> ANFKont a -> M (Exp a)
 toANF expr k =
     case expr of
       ENumber a d -> k $ Left $ VNumber a d
@@ -200,20 +192,19 @@ toANF expr k =
                              (ALet a [(func,  (BDeref a (VId a f)))]
                               (ALet a [(r, BApp a (VId a func) [])] rest))))
       ELabel a l e -> do
-                body <- toANF e k
-                return (ALabel a l body)
+        body <- toANF e k
+        return (ALabel a l body)
       EBreak a l e ->
-          toANFValue e (\v -> return (ABreak a l v))
+        toANFValue e (\v -> return (ABreak a l v))
       EThrow a e ->
-          toANFValue e (\v -> return (AThrow a v))
+        toANFValue e (\v -> return (AThrow a v))
       ECatch a body func -> do
-          body' <- toANF body k
-          toANFValue func (\vfunc ->
-                          return (ACatch a body' vfunc))
+       body' <- toANF body k
+       toANFValue func $ \vfunc -> return $ ACatch a body' vfunc
       EFinally a body rest -> do
-          body' <- toANF body k
-          rest' <- toANFValue rest (\v -> return (AReturn a v))
-          return (AFinally a body' rest')
+        body' <- toANF body k
+        rest' <- toANF rest $ \v -> return $ toExp' a v
+        return $ AFinally a body' rest'
       ELet1 a e1 e2 -> return (AReturn (label e1) (VString (label e1) "ELet1 shouldn't be here"))
       ELet2 a e1 e2 e3 -> return (AReturn (label e1) (VString (label e1) "ELet2 shouldn't be here"))
       EEval a ->  k $ Left (VEval a)
