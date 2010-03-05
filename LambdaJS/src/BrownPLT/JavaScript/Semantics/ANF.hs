@@ -166,12 +166,12 @@ toANF expr k =
           AReturn _ _ -> return e2'
           otherwise   -> return $ ASeq a e1' e2'
       EIf a e1 e2 e3 -> do
-              toANFValue e1 (\v1 -> do
-                          x <- newVar
-                          rest <- k $ Left (VId a x)
-                          e2' <- toANFValue e2 (\v2 -> return (AReturn a v2))
-                          e3' <- toANFValue e3 (\v3 -> return (AReturn a v3))
-                          return (ALet a [(x, (BIf a v1 e2' e3'))] rest))
+        toANFValue e1 $ \v1 -> do
+          x <- newVar
+          rest <- k $ Left (VId a x)
+          e2' <- toANF e2 $ \v2 -> return (toExp' a v2)
+          e3' <- toANF e3 $ \v3 -> return (toExp' a v3)
+          return (ALet a [(x, (BIf a v1 e2' e3'))] rest)
       EWhile a e1 e2 -> do
                 f <- newVar
                 e2' <- toANF e2 (\v2 -> do
