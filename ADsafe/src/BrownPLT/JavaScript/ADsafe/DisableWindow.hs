@@ -49,146 +49,155 @@ than 12 different judgements for IF, so there's room for improvement
 here.
 -}
 
-data RType = RWindow
-           | RSafe
-             deriving (Show, Ord, Eq)
 
-data AType = ASafe
-           | AVar RType -- a variable type is either RWindow or RSafe
-           | AString String
-           | AWindowOf Ident
-           | ATypeIs Ident RType
-           | ATypeIsNot Ident RType
-           | ATypeAnd AType
-           | ATypeOr AType
-             deriving (Show, Ord, Eq)
+data Type = Window
+          | Safe
+          | JS
+          | This
+          | IsWin Ident Bool
+          | MaybeWin Ident Bool
+          | WindowOf Ident
+          | AString String
+            deriving (Show, Ord, Eq)
 
-type TEnv = M.Map Ident AType
+type Env = M.Map Ident Type
 
-isWindow :: AType -> Bool
-isWindow (AVar RWindow) = True
-isWindow (AWindowOf x) = True
+-- Note that MaybeWin <: JS, not Safe -- we don't think about what
+-- the "other" branch is, so assume it could be dangerous
+subType :: Type -> Type -> Bool
+subType a b | (a==b) = True
+subType _ JS = True -- The top type
+subType (WindowOf x) Window = True -- WindowOf is dangerous
+subType This Window = True      -- As is the unchecked this type
+subType (AString s) Safe = True -- Constant strings are not dangerous
+subType (IsWin x b) Safe = True -- IsWin is a boolean, not dangerous
+subType _ _ = False
+
+superType :: Type -> Type -> Type
+superType a b | (a==b) = a
+superType a b | (subType a b) = b
+superType a b | (subType b a) = a
+superType _ _ = JS
 
 -- returns the new value and the type for it
-typeVal :: (Show a, Data a) => TEnv -> Value a -> Either String AType
+typeVal :: (Show a, Data a) => Env -> Value a -> Either String Type
 typeVal env v =
     case v of
-      VId a "$global" -> return (AVar RWindow) -- not safe
+      VId a "$global" -> return Window
       VString a s -> return (AString s)
       VId a x -> case M.lookup x env of
                    Just t -> return t
                    Nothing -> fail ("unbound id" ++ ((show x) ++ (show a)))
+      -- Assume all arguments other than "this" are safe.  Assume "this" is dangerous
       VLambda a ids body -> do
-          let env' = (M.fromList (map (\x -> if x == "this" then (x, AVar RWindow) else (x, ASafe)) ids))
+          let env' = (M.fromList (map (\x -> if x == "this" then 
+                                                 (x, This) else -- initially type "This"
+                                                 (x, Safe)) 
+                                  ids))
           etype <- typeExp (M.union env' env) body
-          return ASafe
-      VNumber a n -> return ASafe
-      VBool a n -> return ASafe
-      VUndefined a -> return ASafe
-      VNull a -> return ASafe
-      VEval a -> return ASafe
+          return Safe
+      VNumber a n -> return Safe
+      VBool a n -> return Safe
+      VUndefined a -> return Safe
+      VNull a -> return Safe
+      VEval a -> return Safe
 
 
-typeBind :: (Data a, Show a) => TEnv -> BindExp a -> Either String AType 
+typeBind :: (Data a, Show a) => Env -> BindExp a -> Either String Type 
 typeBind env b =
     case b of 
       BSetRef a loc val -> do
              vtype <- typeVal env val
-             case vtype of 
-               (AVar RWindow) -> fail ("Can't store window in a ref: " ++ (show b))
-               (AWindowOf x) -> fail ("Can't store windowOf in a ref: " ++ (show b))
-               otherwise -> return vtype
+             if subType vtype Safe then
+                 return vtype else
+                 fail ("Can't store window in a ref: " ++ (show b))
       BRef a val -> do
              typeVal env val
       BDeref a val -> do
              typeVal env val
-      BGetField a (VId a2 x) (VString _ "window") -> do
+      BGetField a (VId a2 x) s -> do
              xtype <- typeVal env (VId a2 x)
-             case xtype of
-               (AVar RWindow) -> return (AWindowOf x)
-               (AWindowOf y) -> return (AWindowOf x)
-               otherwise -> return ASafe
-      BGetField a (VId a2 x) (VString _ _) -> do
-             return ASafe
+             stype <- typeVal env s
+             case stype of
+               AString "window" ->                        
+                   if subType xtype This then
+                       return (WindowOf "this")  else
+                       if subType xtype Safe then
+                           return Safe else
+                           return JS 
+               AString _ -> return Safe
+               otherwise ->              
+                   if subType xtype Safe then
+                       return Safe else
+                       return JS
       BGetField a obj field -> do
-        ftype <- typeVal env field
-        otype <- typeVal env obj
-        case otype of -- if it came out of window, we type it as window
-               (AVar RWindow) -> return (AVar RWindow)
-               (AWindowOf x) -> return (AWindowOf x)
-               otherwise -> return ASafe
+             ftype <- typeVal env field
+             otype <- typeVal env obj
+             if subType otype Safe then -- Only Safe if it came from Safe
+                 return Safe else
+                 return JS
       BUpdateField a obj field val -> do
              vtype <- typeVal env val
-             case vtype of
-               (AVar RWindow) -> fail ("Can't store window in an object" ++ (show b))
-               (AWindowOf x) -> fail ("Can't store windowOf in an object: " ++ (show b))
-               otherwise -> return vtype
+             if not (subType vtype Safe) then
+                 fail ("Can only store Safe values in objects" ++ (show b)) else
+                 return vtype
       BDeleteField a obj field -> do
-             return ASafe
+             return Safe
       BObject a fields -> do
-             otypes <- mapM (typeVal env) (map snd (filter (\ (n,f) -> n /= "callee") fields))
-             if S.member (AVar RWindow) (S.fromList otypes) then
-                 return (AVar RWindow) else
-                 return ASafe
+             otypes <- mapM (typeVal env) (map snd fields)
+             if not (all (\t -> subType t Safe) otypes) then
+                 return JS else
+                 return Safe
       BOp a OStrictEq [(VId _ "this"), y] -> do
              ytype <- typeVal env y
              case ytype of
-               AWindowOf x -> return (ATypeIs x RWindow)
-               otherwise -> return ASafe
+               WindowOf x -> return (IsWin x True)
+               otherwise -> return Safe
       BOp a OPrimToBool [x] -> do
              tx <- typeVal env x
-             let rettype = case tx of
-                             ATypeIs x r -> ATypeIs x r
-                             ATypeIsNot x r -> ATypeIsNot x r
-                             ATypeOr t -> ATypeOr t
-                             ATypeAnd t -> ATypeAnd t
-                             otherwise -> ASafe
-             return rettype
+             case tx of
+               IsWin x b -> return $ IsWin x b
+               MaybeWin x b -> return $ MaybeWin x b
+               otherwise -> return Safe
       BOp a op args -> do
              otypes <- mapM (typeVal env) args
-             return ASafe
+             return Safe
       BApp a f args -> do
              ftype <- typeVal env f
              atypes <- mapM (typeVal env) args
              let atypes' = if atypes == [] then [] else tail atypes -- ignore the 1st arg (assume unsafe)
-             if S.member (AVar RWindow) (S.fromList atypes') then
-                 fail ("Can't pass Window as a function argument." ++ (show b)) else
-                 return ASafe
+             if all (\t -> subType t Safe) atypes' then
+                 return Safe else
+                 fail ("All arguments must be Safe." ++ (show b) ++ (show atypes'))
       -- desugared 'not' operator
       BIf a c (AReturn _ (VBool _ False)) (AReturn _ (VBool _ True)) -> do
              tc <- typeVal env c
              case tc of
-               (ATypeIs x RWindow) -> return (ATypeIsNot x RWindow)
-               (ATypeIsNot x RWindow) -> return (ATypeIs x RWindow)
-               otherwise -> return ASafe
+               IsWin x b -> return (IsWin x (not b))
+               otherwise -> return Safe
       BIf a c t e -> do
              ctype <- typeVal env c
              ttype <- 
                  case ctype of 
-                   (ATypeAnd (ATypeIsNot x RWindow)) -> typeExp (M.insert x (AVar RSafe) (M.insert "this" (AVar RSafe) env)) t
-                   (ATypeIsNot x RWindow) -> 
-                       typeExp (M.insert "this" (AVar RSafe) env) t
+                   (MaybeWin x False) -> typeExp (M.insert x Safe env) t
+                   (IsWin x False) -> typeExp (M.insert x Safe env) t
                    otherwise -> typeExp env t
              etype <- 
                  case ctype of 
-                   (ATypeOr (ATypeIs x RWindow)) -> typeExp (M.insert x (AVar RSafe) (M.insert "this" (AVar RSafe) env)) e
---                   (ATypeIs x RWindow) -> fail ("match typecheck" ++ (show a))
-                   (ATypeIs x RWindow) -> typeExp (M.insert x (AVar RSafe) (M.insert "this" (AVar RSafe) env)) e
+                   (MaybeWin x True) -> typeExp (M.insert x Safe env) e
+                   (IsWin x True) -> typeExp (M.insert x Safe env) e
                    otherwise -> typeExp env e
-             case (ctype, ttype, etype) of
-               (ATypeOr (ATypeIs x1 RWindow), ATypeOr (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIs x2 RWindow))
-               ((ATypeIs x1 RWindow), (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIs x2 RWindow))
-               ((ATypeIsNot x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeOr (ATypeIsNot x2 RWindow))
-               ((ATypeIs x1 RWindow), (ATypeIsNot x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIsNot x2 RWindow))
-               ((ATypeIsNot x1 RWindow), (ATypeIs x2 RWindow), _) | x1 == x2 -> return (ATypeAnd (ATypeIs x2 RWindow))
-               otherwise ->
-                   if S.member (AVar RWindow) (S.fromList [ttype,etype]) then
-                       return (AVar RWindow) else
-                       return ASafe
-      BValue a v -> do
+             case (ctype, ttype) of
+               -- We only need these three
+               (MaybeWin x1 True, MaybeWin x2 True) | (x1==x2) -> return (MaybeWin x1 True)
+               (IsWin x1 True, IsWin x2 True) | (x1==x2) -> return (MaybeWin x1 True)
+               (IsWin x1 True, IsWin x2 False) | (x1==x2) -> return (MaybeWin x1 False)
+               otherwise -> return (superType ttype etype)
+      BValue a v -> 
              typeVal env v
 
-typeExp :: (Show a, Data a) => TEnv -> Exp a -> Either String AType
+
+typeExp :: (Show a, Data a) => Env -> Exp a -> Either String Type
 typeExp env e =
     case e of
       ALet a binds body -> do
@@ -204,46 +213,45 @@ typeExp env e =
              btype <- typeExp env body
              return btype
       ABreak a lbl v -> do
-        vtype <- typeVal env v
-        case vtype of
-          (AVar RWindow) -> fail ("Can't break on Window" ++ show e)
-          (AWindowOf x) -> fail ("Can't break on WindowOf" ++ show e)
-          otherwise -> return vtype
+             vtype <- typeVal env v
+             if not (subType vtype Safe) then
+                 fail ("Must break on Safe" ++ show e ++ show vtype) else
+                 return vtype
       AThrow a v -> do
              vtype <- typeVal env v
-             case vtype of
-               (AVar RWindow) -> fail "Can't throw Window"
-               (AWindowOf x) -> fail ("Can't throw WindowOf" ++ show e)
-               otherwise -> return vtype
+             if not (subType vtype Safe) then
+                 fail ("Must throw Safe" ++  (show e) ++ (show vtype)) else
+                 return vtype
       ACatch a body catch -> do
              btype <- typeExp env body
              ctype <- typeVal env catch
-             return ASafe
+             return (superType btype ctype)
       AFinally a body final -> do
              btype <- typeExp env body
              ftype <- typeExp env final
-             return ASafe
+             return (superType btype ftype)
       AReturn a v -> do
              typeVal env v
       ABind a b -> do
              typeBind env b
 
-
-allEnv = 
-  [ "$global", "$Object.prototype", "$Function.prototype", "$Date.prototype"
+safeEnv = 
+  [ "$Object.prototype", "$Function.prototype", "$Date.prototype"
   , "$Number.prototype", "$Array.prototype", "$Boolean.prototype"
   , "$Error.prototype", "$Boolean.prototype", "$Error.prototype" 
   , "$ConversionError.prototype", "$RangeError.prototype" 
   , "$ReferenceError.prototype", "$SyntaxError.prototype" 
   , "$TypeError.prototype", "$URIError.prototype", "Object", "Function"
-  , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
+  , "$RegExp.prototype", "RegExp", "Date", "Number"
   , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
   , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
-  , "uRIError", "this", "$makeException"
+  , "URIError", "$makeException"
   ]
 
-globalEnv = allEnv -- change to [] if using ECMA environment
+windowEnv = 
+    [ "$global", "Array", "$Array.prototype" ]
 
-
-isTypeable = typeExp M.empty . addGlobals
-    where addGlobals b = ALet nopos [(x, (BValue nopos (VUndefined nopos))) | x <- globalEnv] b
+isTypeable :: (Data a, Show a) => Exp a -> Either String Type
+isTypeable = typeExp startEnv
+    where startEnv = (M.union (M.fromList (map (\x -> (x, Window)) windowEnv))
+                           (M.fromList (map (\x -> (x, Safe)) safeEnv)))
