@@ -583,6 +583,11 @@ expr env e = case e of
   InfixExpr a1 OpStrictEq (PrefixExpr a2 PrefixTypeof e) (StringLit a3 s)
     | s /= "function" && s /= "object" ->
     EOp a1 OStrictEq [EOp a2 OTypeof [expr env e], EString a3 s]
+  InfixExpr a1 OpStrictNEq (PrefixExpr a2 PrefixTypeof e) (StringLit a3 s)
+    | s /= "function" && s /= "object" ->
+    EIf nopos (EOp a1 OStrictEq [EOp a2 OTypeof [expr env e], EString a3 s])
+        (EBool nopos False)
+        (EBool nopos True)
   InfixExpr _ op e1 e2 -> infixOp op (expr env e1) (expr env e2)
   CondExpr a e1 e2 e3 -> EIf a (toBoolean $ expr env e1) 
                              (expr env e2) (expr env e3)
