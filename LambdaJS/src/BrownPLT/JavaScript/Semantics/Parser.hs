@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.Parser ( expr ) where
+module BrownPLT.JavaScript.Semantics.Parser ( expr, parseExprFromString ) where
 
 import Control.Applicative ( Applicative(..), (<$>))
 import Control.Monad
@@ -145,3 +145,9 @@ expr = (try value)
         <|> (EOp          <@>  (try $ op) <*> (many expr))
         <|> (EApp         <@>  expr       <*> (many expr)))
   where clauses = parens $ many clause
+
+
+parseExprFromString :: String -> String 
+                      -> Either ParseError (Expr SourcePos)
+parseExprFromString src script = parse expr src script
+
