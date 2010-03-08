@@ -13,7 +13,6 @@ import BrownPLT.JavaScript.ADsafe.Transformation
 import qualified BrownPLT.JavaScript.ADsafe.DisableBanned as B
 import qualified BrownPLT.JavaScript.ADsafe.DisableEval as E
 import qualified BrownPLT.JavaScript.ADsafe.DisableWindow as W
-import qualified BrownPLT.JavaScript.ADsafe.MakeableTags as K
 import BrownPLT.JavaScript.ADsafe.SimplifyIf
 import BrownPLT.JavaScript.Parser ( parseScriptFromString )
 import BrownPLT.JavaScript.Semantics.Desugar ( desugar )
@@ -31,7 +30,6 @@ desugarANFMain  opts = mainTemplate (prettyANF . adsafeANF) opts
 getCheckMain    opts = mainTemplateError B.isTypeable opts
 evalCheckMain   opts = mainTemplateError E.isTypeable opts
 windowCheckMain opts = mainTemplateError (W.isTypeable . adsafeANF) opts
-tagCheckMain    opts = mainTemplateError (K.isTypeable . adsafeANF) opts
 
 mainTemplate :: (ExprPos -> String) -> [Flag] -> IO ()
 mainTemplate fn opts = 
@@ -93,7 +91,6 @@ readChecker = Action . readChecker' . (map toLower)
   where readChecker' "get"    = getCheckMain
         readChecker' "eval"   = evalCheckMain
         readChecker' "window" = windowCheckMain
-        readChecker' "tags"   = tagCheckMain
         readChecker' _        = undefined
 
 options :: [OptDescr Flag]
