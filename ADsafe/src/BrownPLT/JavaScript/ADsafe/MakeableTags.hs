@@ -53,7 +53,7 @@ typeVal env v =
       VBool _ b -> return NotDocument
       VId a "makeableTagName" -> return MTNObj
       VId a "document" -> return JS
---      VId a "$global" -> return JS
+      VId a "$global" -> return JS
       VId a x -> case M.lookup x env of
                   Just t -> return t
                   Nothing -> fail ("unbound id" ++ (show x) ++ (show a))
@@ -107,15 +107,13 @@ typeBind env b =
                  ("0", x)] -> do
              xtype <- typeVal env x
              case xtype of
-               AString ->  return AString -- fail ("found safe? object: " ++ show b ++ show xtype)
-               Makeable -> return Makeable -- fail ("found safe? object: " ++ show b ++ show xtype)
---return Makeable
+               AString ->  return AString
+               Makeable -> return Makeable
                otherwise -> return xtype
       BObject a fields -> do
         otypes <- mapM (\(name,val) -> typeVal env val) fields
         if not (all (\t -> subType t NotDocument) otypes) then
             return JS else
-            --                 fail ("Unsafe object" ++ show b ++ show otypes) else
             return NotDocument
       BApp a f args -> do
         ftype <- typeVal env f
@@ -125,7 +123,6 @@ typeBind env b =
           JS -> if not (all safe atypes') then
                     fail ("Unsafe application: " ++ show b ++ show ftype ++ show atypes') else
                     return NotDocument
---                                            fail ("Check it out: " ++ show b ++ show ftype ++ show atypes) --
           otherwise -> return NotDocument
       BOp a OTypeof [(VId a2 x)] -> do
         xtype <- typeVal env (VId a2 x)
@@ -162,8 +159,8 @@ typeBind env b =
                           IsString x False -> M.insert x AString env
                           IsMakeable x False -> M.insert x Makeable env
                           otherwise -> env
-             ttype <- typeExp tenv t --(if tenv == env then typeExp tenv t else fail ("If-split then: " ++ (show b) ++ (show ctype)))
-             etype <- typeExp eenv e --(if eenv == env then typeExp tenv e else fail ("If-split else: " ++ (show b) ++ (show ctype)))
+             ttype <- typeExp tenv t
+             etype <- typeExp eenv e
              return (superType ttype etype)
       BValue a v -> do
              typeVal env v
@@ -202,7 +199,7 @@ typeExp env e =
       ABind a b -> typeBind env b
 
 allEnv = 
-  [ "$global", "$Object.prototype", "$Function.prototype", "$Date.prototype"
+  [ "$Object.prototype", "$Function.prototype", "$Date.prototype"
   , "$Number.prototype", "$Array.prototype", "$Boolean.prototype"
   , "$Error.prototype", "$Boolean.prototype", "$Error.prototype" 
   , "$ConversionError.prototype", "$RangeError.prototype" 
