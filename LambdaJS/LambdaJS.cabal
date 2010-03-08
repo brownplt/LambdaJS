@@ -26,6 +26,7 @@ Library
     WebBits >= 2.1
   ghc-options:
     -fwarn-incomplete-patterns
+    -O3
   Extensions:     
     Generics DeriveDataTypeable Rank2Types FlexibleInstances
     ScopedTypeVariables
@@ -43,6 +44,8 @@ Library
     BrownPLT.JavaScript.Semantics.ANF
     BrownPLT.JavaScript.Analysis.Pure
     BrownPLT.JavaScript.Analysis.FreeVars
+    BrownPLT.JavaScript.Analysis.RemoveUnused
+    BrownPLT.JavaScript.Analysis.PushDown
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
@@ -60,6 +63,7 @@ Executable lambdaJS
     WebBits >= 2.1
   ghc-options:
     -fwarn-incomplete-patterns
+    -O3
   Extensions:     
     Generics DeriveDataTypeable Rank2Types FlexibleInstances
     ScopedTypeVariables
