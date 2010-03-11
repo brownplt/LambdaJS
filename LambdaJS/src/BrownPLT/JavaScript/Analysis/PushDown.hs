@@ -34,12 +34,15 @@ replaceIDValMap x y ps = map (\(s,v) -> (s, replaceIDVal x y v)) ps
 
 replaceIDBind :: forall a. (Data a) => Ident -> Ident -> BindExp a -> BindExp a
 replaceIDBind x y b = 
-    gmapT (mkT   (replaceIDVal    x y :: Value   a  -> Value   a )
-          `extT` (replaceIDExp    x y :: Exp     a  -> Exp     a )
-          `extT` (replaceIDBind   x y :: BindExp a  -> BindExp a )
-          `extT` (replaceIDValLst x y :: [Value  a] -> [Value  a])
-          `extT` (replaceIDValMap x y
-                      :: [(String, Value a)] -> [(String, Value a)])) b
+    case b of 
+      BSetRef a loc val | loc == x -> BSetRef a y (replaceIDVal x y val)
+      otherwise ->
+          gmapT (mkT   (replaceIDVal    x y :: Value   a  -> Value   a )
+                 `extT` (replaceIDExp    x y :: Exp     a  -> Exp     a )
+                 `extT` (replaceIDBind   x y :: BindExp a  -> BindExp a )
+                 `extT` (replaceIDValLst x y :: [Value  a] -> [Value  a])
+                 `extT` (replaceIDValMap x y
+                         :: [(String, Value a)] -> [(String, Value a)])) b
     
 
 replaceIDExp :: forall a. (Data a) => Ident -> Ident -> Exp a -> Exp a
