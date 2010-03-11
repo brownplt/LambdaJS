@@ -14,6 +14,8 @@ import qualified BrownPLT.JavaScript.ADsafe.DisableBanned as B
 import qualified BrownPLT.JavaScript.ADsafe.DisableEval as E
 import qualified BrownPLT.JavaScript.ADsafe.DisableWindow as W
 import qualified BrownPLT.JavaScript.ADsafe.MakeableTags as K
+import qualified BrownPLT.JavaScript.ADsafe.JSLint as L
+
 import BrownPLT.JavaScript.ADsafe.SimplifyIf
 import BrownPLT.JavaScript.Parser ( parseScriptFromString )
 import BrownPLT.JavaScript.Semantics.Desugar ( desugar )
@@ -34,6 +36,7 @@ getCheckMain    opts = mainTemplateError B.isTypeable opts
 evalCheckMain   opts = mainTemplateError E.isTypeable opts
 windowCheckMain opts = mainTemplateError (W.isTypeable . checkANF) opts
 tagCheckMain    opts = mainTemplateError (K.isTypeable . checkANF) opts
+jslintMain      opts = mainTemplateError L.isTypeable opts
 
 mainTemplate :: (ExprPos -> String) -> [Flag] -> IO ()
 mainTemplate fn opts = 
@@ -98,6 +101,7 @@ readChecker = Action . readChecker' . (map toLower)
         readChecker' "eval"   = evalCheckMain
         readChecker' "window" = windowCheckMain
         readChecker' "tags"   = tagCheckMain
+        readChecker' "jslint" = jslintMain
         readChecker' _        = undefined
 
 options :: [OptDescr Flag]
