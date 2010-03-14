@@ -631,7 +631,7 @@ expr env e = case e of
                             ("prototype", prototype),
                             ("$strRep", EString nopos strRep),
                             ("$proto", EId nopos "$Function.prototype")]
-      where s = BlockStmt a (liftFuncStmts [unliftedStmt])
+      where s = BlockStmt a ((liftFuncStmts [unliftedStmt]) ++ [(ReturnStmt nopos Nothing)])
             arg x ix = case x `S.member` assignableArgs of
               True -> ERef a $ EGetField nopos (EDeref nopos $ EDeref nopos (EId nopos "arguments"))
                                        (EString nopos $ show ix)
