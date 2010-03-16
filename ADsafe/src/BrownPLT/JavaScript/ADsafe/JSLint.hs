@@ -84,7 +84,7 @@ typeCheck e = case e of
 
   ELet _ binds body -> do
     boundTypes <- mapM typeCheck (map snd binds)
-    let env' = M.fromList $ zip (map fst binds) boundTypes
+    let env' = M.fromList $ [("ADSAFE", ADsafe)] ++ (zip (map fst binds) boundTypes)
     local (M.union env') $ typeCheck body
 
   EDeref _ e ->
@@ -124,19 +124,28 @@ typeCheck e = case e of
 
   EApp _ fe es -> do
     typeCheck fe
-    mapM (flip checkViolation "app arg") es 
+    case es of
+      (this:as) -> do
+        typeCheck this
+        mapM_ (flip checkViolation "app arg") as
+      _         -> return ()
     return Lint
   EOp _ _ es -> do
-    mapM typeCheck es
+    mapM (flip checkViolation "primitive op") es
     return Lint
 
   EIf _ c e2 e3 -> do
     typeCheck c
-    typeCheck e2
-    typeCheck e3
+    tt <- typeCheck e2
+    ft <- typeCheck e3
+    if tt == ADsafe || ft == ADsafe
+      then return ADsafe
+      else return Lint
   EObject _ props -> do
-    mapM_ (flip checkViolation "object field") (map snd props)
-    return Lint
+    ts <- mapM typeCheck (map snd props)
+    if null [() | ADsafe <- ts]
+      then return Lint
+      else return ADsafe
 
   ELabel _ lbl e -> typeCheck e
   EBreak _ lbl e -> typeCheck e
@@ -164,5 +173,5 @@ ljsEnv =
 isTypeable e = (`runReaderT` initialEnv) $ runTyper $ checkViolation e "top-level"
   where
     initialEnv = M.fromList $
-        [("$global", Global), ("$makeException", Lint)]
+        [("ADSAFE", ADsafe), ("$global", Global), ("$makeException", Lint)]
         ++ [(id, Lint) | id <- ljsEnv]
