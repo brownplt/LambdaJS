@@ -26,6 +26,7 @@ Library
     parsec >= 2.1.0.0 && < 3
   ghc-options:
     -fwarn-incomplete-patterns
+    -O3
   Extensions:     
     Generics DeriveDataTypeable ScopedTypeVariables
     FlexibleInstances FlexibleContexts GeneralizedNewtypeDeriving
@@ -45,6 +46,7 @@ Executable adsafe
     parsec >= 2.1.0.0 && < 3
   ghc-options:
     -fwarn-incomplete-patterns
+    -O3
   Extensions:     
     Generics DeriveDataTypeable ScopedTypeVariables
     FlexibleInstances FlexibleContexts GeneralizedNewtypeDeriving
