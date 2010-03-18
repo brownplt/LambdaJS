@@ -46,6 +46,7 @@ Library
     BrownPLT.JavaScript.Analysis.FreeVars
     BrownPLT.JavaScript.Analysis.RemoveUnused
     BrownPLT.JavaScript.Analysis.PushDown
+    BrownPLT.JavaScript.Analysis.MergeSequences
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
