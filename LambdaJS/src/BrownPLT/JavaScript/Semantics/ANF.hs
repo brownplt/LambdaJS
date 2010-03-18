@@ -56,7 +56,7 @@ data Exp a
   | ABind a (BindExp a)
     deriving (Show, Data, Typeable)
 
-type M a = State Int a
+type M a = State (String, Int) a
 
 type ANFKont a  = Either (Value a) (BindExp a) -> M (Exp a)
 type ANFsKont a = [Either (Value a) (BindExp a)] -> M (Exp a)
@@ -65,9 +65,9 @@ type ValsKont a = [Value a] -> M (Exp a)
 
 newVar :: M Ident
 newVar = do
-  n <- get
-  put (n + 1)
-  return ("$anf" ++ show n)
+  (s, n) <- get
+  put (s, (n + 1))
+  return (s ++ show n)
 
 toExp (Left  v) = AReturn (label v) v
 toExp (Right b) = ABind   (label b) b
@@ -210,5 +210,5 @@ toANF expr k =
       EEval a ->  k $ Left (VEval a)
 
 
-exprToANF :: Data a => Expr a -> Exp a
-exprToANF e = (`evalState` 0) $ toANFValue (removeHOAS e) (\v -> (return (AReturn (label e) v)))
+exprToANF :: Data a => String -> Expr a -> Exp a
+exprToANF s e = evalState (toANFValue (removeHOAS e) (\v -> (return (AReturn (label e) v)))) (s,0)

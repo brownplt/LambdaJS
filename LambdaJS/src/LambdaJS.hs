@@ -37,7 +37,7 @@ desugarANF opts = do
   str <- getContents
   case parseScriptFromString "<stdin>" str of
     Right script -> do
-      putStrLn (prettyANF (exprToANF (desugar script env)))
+      putStrLn (prettyANF (exprToANF "$$anf" (desugar script env)))
       exitSuccess
     Left err -> do
       putStrLn (show err)

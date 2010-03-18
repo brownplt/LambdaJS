@@ -25,13 +25,14 @@ import BrownPLT.JavaScript.Semantics.RemoveHOAS
 import BrownPLT.JavaScript.Semantics.Parser as P
 import BrownPLT.JavaScript.Analysis.RemoveUnused
 import BrownPLT.JavaScript.Analysis.PushDown
+import BrownPLT.JavaScript.Analysis.MergeSequences
 
 desugarMain     opts = mainTemplate pretty opts
 desugarANFMain  opts = mainTemplate (prettyANF . adsafeANF) opts
 getCheckMain    opts = mainTemplateError B.isTypeable opts
 evalCheckMain   opts = mainTemplateError E.isTypeable opts
-windowCheckMain opts = mainTemplateError (W.isTypeable . adsafeANF) opts
-tagCheckMain    opts = mainTemplateError (K.isTypeable . adsafeANF) opts
+windowCheckMain opts = mainTemplateError (W.isTypeable . checkANF) opts
+tagCheckMain    opts = mainTemplateError (K.isTypeable . checkANF) opts
 
 mainTemplate :: (ExprPos -> String) -> [Flag] -> IO ()
 mainTemplate fn opts = 
@@ -71,7 +72,8 @@ adsafeDesugar script env =
       core4 = rewriteErrors core3
     in core4
 
-adsafeANF =  {-pushDown . removeUnused . ifReduce . removeUnused . ifReduce .-} exprToANF
+adsafeANF =  mergeSeqs . pushDown . removeUnused . ifReduce . removeUnused . ifReduce . (exprToANF "$anf")
+checkANF = (exprToANF "$$anf")
 
 envForDesugar :: [Flag] -> ExprPos -> ExprPos
 envForDesugar opts | null [() | NoEnv <- opts] = ecma262Env
