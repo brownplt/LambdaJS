@@ -108,7 +108,6 @@ isBindExp e =
       EOp a op vals -> all isValueExpr vals
       EApp a fun args -> all isValueExpr (fun:args)
       v -> isValueExpr v
-      otherwise -> False
 
 -- Make sure that isBindExpExpr is True before calling this
 directBind :: Data a => Expr a -> M (Either Bool (BindExp a))
