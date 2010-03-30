@@ -122,7 +122,6 @@ toANF expr k =
                                                           x <- newVar
                                                           rest <- k $ Left (VId a x)
                                                           return (ALet a [(x, BApp a vfunc vargs)] rest)))
-      -- Is this bad nesting of lets?  I'm not sure...
       ELet a binds body -> 
         let (ns, bs) = unzip binds
           in do
