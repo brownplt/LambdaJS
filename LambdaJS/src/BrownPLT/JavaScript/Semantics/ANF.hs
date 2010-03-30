@@ -8,6 +8,8 @@ module BrownPLT.JavaScript.Semantics.ANF
 
 import Control.Monad.State
 
+import Data.Generics
+
 import Data.Maybe ( fromJust, maybe )
 import Data.Either ( either )
 
@@ -63,6 +65,98 @@ type ANFsKont a = [Either (Value a) (BindExp a)] -> M (Exp a)
 type ValKont a  = Value a -> M (Exp a)
 type ValsKont a = [Value a] -> M (Exp a)
 
+isValueExpr :: Data a => Expr a -> Bool
+isValueExpr e = 
+    case e of
+      ENumber a d -> True
+      EString a s -> True
+      EBool   a b -> True
+      EUndefined a -> True
+      ENull a -> True
+      EId a x -> True
+      ELambda a args body -> True
+      otherwise -> False
+
+directValue :: Data a => Expr a -> M (Value a)
+directValue e = 
+    case e of
+      ENumber a d -> return $ VNumber a d
+      EString a s -> return $ VString a s
+      EBool   a b -> return $ VBool   a b
+      EUndefined a -> return $ VUndefined a
+      ENull a -> return $ VNull a
+      EId a x -> return $ VId a x
+      ELambda a args body -> do
+             body' <- toANF body $ \vb -> return $ toExp' a vb
+             return $ VLambda a args body'
+      otherwise -> return $ VString (label e) "Something very bad happened"
+
+-- Make sure that isBindExpExpr is True before calling this
+isBindExp :: Data a => Expr a -> Bool
+isBindExp e =
+    case e of
+      EIf a c thn els -> isValueExpr c
+      EGetField a obj f -> (isValueExpr obj) && (isValueExpr f)
+      EDeleteField a obj f -> (isValueExpr obj) && (isValueExpr f)
+      EUpdateField a obj f val -> (isValueExpr obj) &&
+                                  (isValueExpr f) &&
+                                  (isValueExpr val)
+      EObject a fields -> all isValueExpr (map snd fields)
+      ESetRef a ident val -> isValueExpr val
+      ERef a val -> isValueExpr val
+      EDeref a val -> isValueExpr val
+      EOp a op vals -> all isValueExpr vals
+      EApp a fun args -> all isValueExpr (fun:args)
+      v -> isValueExpr v
+      otherwise -> False
+
+-- Make sure that isBindExpExpr is True before calling this
+directBind :: Data a => Expr a -> M (Either Bool (BindExp a))
+directBind e =
+    case e of
+      EIf a c thn els -> do
+             thn' <- toANF thn $ \vb -> return $ toExp' a vb
+             els' <- toANF els $ \vb -> return $ toExp' a vb
+             c' <- directValue c
+             return $ Right $  BIf a c' thn' els'
+      EGetField a obj f -> do
+             obj' <- directValue obj
+             f' <- directValue f
+             return $ Right $  BGetField a obj' f'
+      EDeleteField a obj f -> do
+             obj' <- directValue obj
+             f' <- directValue f
+             return $ Right $  BDeleteField a obj' f'
+      EUpdateField a obj f val -> do
+             obj' <- directValue obj
+             f' <- directValue f
+             val' <- directValue f
+             return $ Right $  BUpdateField a obj' f' val'
+      EObject a fields -> do
+             vals' <- mapM directValue (map snd fields)
+             let fields' = zip (map fst fields) vals'
+             return $ Right $  BObject a fields'
+      ESetRef a ident val -> do
+             val' <- directValue val
+             return $ Right $  BSetRef a ident val'
+      ERef a val -> do
+             val' <- directValue val
+             return $ Right $  BRef a val'
+      EDeref a val -> do
+             val' <- directValue val
+             return $ Right $  BDeref a val'
+      EOp a op vals -> do
+             vals' <- mapM directValue vals
+             return $ Right $  BOp a op vals'
+      EApp a fun args -> do
+             fun' <- directValue fun
+             args' <- mapM directValue args
+             return $ Right $  BApp a fun' args'
+      v | isValueExpr v -> do
+             v' <- directValue v
+             return $ Right $  (BValue (label v) v')
+      otherwise -> return $ (Left False)
+
 newVar :: M Ident
 newVar = do
   (s, n) <- get
@@ -77,10 +171,13 @@ toExp' a e = either (AReturn a) (ABind a) e
 
 toValue :: Data a => Either (Value a) (BindExp a) -> ValKont a -> M (Exp a)
 toValue (Left  v) k = k v
-toValue (Right b) k = do
-    x <- newVar 
-    e <- k $ VId (label b) x
-    return $ ALet (label b) [(x, b)] e
+toValue (Right b) k =
+    case b of
+      BValue a v -> k v
+      otherwise -> do
+             x <- newVar 
+             e <- k $ VId (label b) x
+             return $ ALet (label b) [(x, b)] e
 
 toValues :: Data a => [Either (Value a) (BindExp a)] -> ValsKont a -> M (Exp a)
 toValues []     k = k []
@@ -92,6 +189,16 @@ toANFValue e k = toANF e $ \e' -> toValue e' k
 
 toANFValues :: Data a => [Expr a] -> ValsKont a -> M (Exp a)
 toANFValues es k = toANFMany es $ \es' -> toValues es' k
+
+toANFLet :: Data a => [Expr a] -> ANFsKont a -> M (Exp a)
+toANFLet [] k = k []
+toANFLet (e:es) k =
+    if isBindExp e then do
+                     b <- directBind e
+                     case b of
+                       Right b -> toANFMany es $ \xs -> k ((Right b):xs)
+                       otherwise -> toANF e $ \v -> toANFMany es $ \xs -> k (v:xs)
+    else toANF e $ \v -> toANFMany es $ \xs -> k (v:xs)
 
 toANFMany :: Data a => [Expr a] -> ANFsKont a -> M (Exp a)
 toANFMany [] k = k []
@@ -110,6 +217,11 @@ toANF expr k =
       ELambda a args body -> do
         abody <- toANF body $ \vb -> return $ toExp' a vb
         k $ Left $ VLambda a args abody
+      b | isBindExp b -> do 
+                b' <- directBind b
+                case b' of
+                  Right b'' -> k (Right b'')
+                  otherwise -> k (Left (VString (label b) "Bad stuff"))
       EObject a binds -> 
         let (ns, fs) = unzip binds
           in toANFValues fs $ \vs -> k $ Right $ BObject a (zip ns vs)
@@ -126,7 +238,7 @@ toANF expr k =
         let (ns, bs) = unzip binds
           in do
             body' <- toANF body k
-            toANFMany bs $ \vbs -> do
+            toANFLet bs $ \vbs -> do
               let vbs' = map (either (BValue a) id) vbs
               return $ ALet a (zip ns vbs') body'
       ESetRef a id e -> toANFValue e (\v -> do
