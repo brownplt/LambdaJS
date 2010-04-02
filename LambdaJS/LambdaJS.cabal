@@ -47,6 +47,7 @@ Library
     BrownPLT.JavaScript.Analysis.RemoveUnused
     BrownPLT.JavaScript.Analysis.PushDown
     BrownPLT.JavaScript.Analysis.MergeSequences
+    BrownPLT.JavaScript.Analysis.AlphaRename
   Other-Modules:
     BrownPLT.JavaScript.Semantics.Prelude
 
