@@ -26,6 +26,7 @@ import BrownPLT.JavaScript.Semantics.Parser as P
 import BrownPLT.JavaScript.Analysis.RemoveUnused
 import BrownPLT.JavaScript.Analysis.PushDown
 import BrownPLT.JavaScript.Analysis.MergeSequences
+import BrownPLT.JavaScript.Analysis.AlphaRename
 
 desugarMain     opts = mainTemplate pretty opts
 desugarANFMain  opts = mainTemplate (prettyANF . adsafeANF) opts
@@ -70,9 +71,10 @@ adsafeDesugar script env =
       core2 = removeHOAS core1
       core3 = flattenSeqs core2
       core4 = rewriteErrors core3
-    in core4
+      core5 = alphaRename core4
+    in core5
 
-adsafeANF =  mergeSeqs . pushDown . removeUnused . ifReduce . removeUnused . ifReduce . (exprToANF "$anf")
+adsafeANF = mergeSeqs . pushDown . removeUnused . ifReduce . removeUnused .  ifReduce . (exprToANF "$anf")
 checkANF = (exprToANF "$$anf")
 
 envForDesugar :: [Flag] -> ExprPos -> ExprPos
