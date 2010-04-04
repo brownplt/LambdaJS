@@ -1,6 +1,10 @@
 LambdaJS
 ========
 
+For more information, see our paper on LambdaJS:
+
+http://www.cs.brown.edu/~sk/Publications/Papers/Published/gsk-essence-javascript/
+
 - Redex/ contains our mechanized semantics in PLT Redex.  Tested with 
   PLT Scheme 4.2.3.
 
