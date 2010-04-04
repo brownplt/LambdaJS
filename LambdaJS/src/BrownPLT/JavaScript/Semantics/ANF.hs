@@ -122,8 +122,8 @@ toANF expr k =
         let (ns, bs) = unzip binds
           in do
             body' <- toANF body k
-            toANFMany bs $ \vbs -> do
-              let vbs' = map (either (BValue a) id) vbs
+            toANFValues bs $ \vbs -> do
+              let vbs' = map (BValue a) vbs
               return $ ALet a (zip ns vbs') body'
       ESetRef a ident e -> 
           toANFValue e (\v -> k $ Right (BSetRef a ident v))
@@ -155,11 +155,11 @@ toANF expr k =
           k $ Right (BIf a v1 e2' e3')
       EWhile a e1 e2 -> do
                 f <- newVar
-                e2' <- toANF e2 (\v2 -> do
-                                   tmp1 <- newVar
-                                   recfunc <- newVar
-                                   return (ALet a [(recfunc, (BDeref a (VId a f)))]
-                                           (ALet a [(tmp1, (BApp a (VId a recfunc) []))] (AReturn a (VId a tmp1)))))
+                e2' <- toANFValue e2 (\v2 -> do
+                                        tmp1 <- newVar
+                                        recfunc <- newVar
+                                        return (ALet a [(recfunc, (BDeref a (VId a f)))]
+                                                (ALet a [(tmp1, (BApp a (VId a recfunc) []))] (AReturn a (VId a tmp1)))))
                 loopBody <- toANFValue e1 (\v1 -> do
                                         return (ABind a (BIf a v1 e2' (AReturn a (VUndefined a)))))
                 r <- newVar

@@ -28,7 +28,7 @@ alphaRename' env e =
       EId a x -> 
           case M.lookup x env of
             Just y -> return (EId a y)
-            Nothing -> return e--fail ("Unbound id: " ++ (show x))
+            Nothing -> return e
       ELambda a args body -> do
              newVars <- mapM nextVar args
              let env' = M.union (M.fromList (zip args newVars)) env
@@ -58,7 +58,7 @@ alphaRename' env e =
              val' <- alphaRename' env val
              case M.lookup x env of
                Just y -> return $ ESetRef a y val'
-               Nothing -> fail ("Unbound id: " ++ x)
+               Nothing -> return e
       ERef a val -> do
              val' <- alphaRename' env val
              return $ ERef a val'
