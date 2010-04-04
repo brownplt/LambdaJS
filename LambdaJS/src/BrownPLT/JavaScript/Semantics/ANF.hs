@@ -79,10 +79,13 @@ toExp' a e = either (AReturn a) (ABind a) e
 
 toValue :: Data a => Either (Value a) (BindExp a) -> ValKont a -> M (Exp a)
 toValue (Left  v) k = k v
-toValue (Right b) k = do
-  x <- newVar 
-  e <- k $ VId (label b) x
-  return $ ALet (label b) [(x, b)] e
+toValue (Right b) k =
+  case b of
+    BValue a v -> k v
+    otherwise -> do
+           x <- newVar 
+           e <- k $ VId (label b) x
+           return $ ALet (label b) [(x, b)] e
 
 toValues :: Data a => [Either (Value a) (BindExp a)] -> ValsKont a -> M (Exp a)
 toValues []     k = k []
@@ -122,8 +125,8 @@ toANF expr k =
         let (ns, bs) = unzip binds
           in do
             body' <- toANF body k
-            toANFValues bs $ \vbs -> do
-              let vbs' = map (BValue a) vbs
+            toANFMany bs $ \vbs -> do
+              let vbs' = map (either (BValue a) id) vbs
               return $ ALet a (zip ns vbs') body'
       ESetRef a ident e -> 
           toANFValue e (\v -> k $ Right (BSetRef a ident v))
