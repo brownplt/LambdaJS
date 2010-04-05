@@ -16,11 +16,11 @@ nextVar s = do
     Just d -> do
               let m' = M.insert s (d + 1) m
               put m'
-              return (s ++ show (d + 1))
+              return (s ++ "/" ++ show (d + 1))
     Nothing -> do
               let m' =  M.insert s 0 m
               put m'
-              return (s ++ show 0)
+              return (s ++ "/" ++ show 0)
 
 alphaRename' :: Env -> Expr a -> ENV (Expr a)
 alphaRename' env e =
@@ -58,7 +58,7 @@ alphaRename' env e =
              val' <- alphaRename' env val
              case M.lookup x env of
                Just y -> return $ ESetRef a y val'
-               Nothing -> return e
+               Nothing -> return $ ESetRef a x val'
       ERef a val -> do
              val' <- alphaRename' env val
              return $ ERef a val'
