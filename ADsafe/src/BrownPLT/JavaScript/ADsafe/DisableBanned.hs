@@ -51,27 +51,32 @@ superType t1 t2 =
 
 
 -- ADsafe banned list
+
+-- By putting $proto in this list, I'm making the following assumption:
+
+-- No object's "prototype" property has a built-in property we don't
+-- want to leak to the clients, except for those named in the banned
+-- list.  Clearly, if window gets set as your $proto, we have
+-- problems, but that is what the window checker is for
 banned :: Set String
 banned = 
   S.fromList [ "arguments", "callee", "caller", "constructor", "eval"
-             , "prototype", "unwatch", "valueOf", "watch" ]
+             , "prototype", "unwatch", "valueOf", "watch", "$proto" ]
+
+isBanned :: String -> Bool
+isBanned s | S.member s banned = True
+isBanned _ = False
 
 typeCheck :: Expr SourcePos -> Typer T
 typeCheck e = case e of
   ENumber _ _  -> return Safe
-  EString _ s  -> return $ if s `S.member` banned then JS else Safe
+  EString _ s  -> return $ if isBanned s then JS else Safe
   EUndefined _ -> return Safe
   EBool _ _    -> return Safe
   ENull _ -> return Safe
   ELambda a xs e ->
-    let env' = M.fromList (map (\x -> (x, JS)) xs)
-      in local (M.union env') $ do
-            t1 <- typeCheck e
-            if sourceLine a == 1611 && sourceColumn a == 14 
-              then if subType t1 World
-                        then return t1
-                        else throwError $ "get does not satisfy the property: " ++ (show t1)
-              else return t1
+      let env' = M.fromList (map (\x -> if x == "this" then (x, JS) else (x, JS)) xs)
+      in local (M.union env') $ typeCheck e
   EId _ x -> do
     result <- asks $ M.lookup x
     case result of
@@ -138,9 +143,14 @@ typeCheck e = case e of
         t2 <- typeCheck e2
         return $ superType t1 t2
       Nothing -> checkIf c e1 e2
-  EObject _ props -> do
+  EObject a props -> do
     ts <- mapM typeCheck (map snd props)
-    return $ foldl superType World ts
+    to <- foldM (\t' (s, t) -> if isBanned s then return t' else return $ superType t t') World (zip (map fst props) ts)
+    case (sourceLine a, sourceColumn a) of
+      (1478, 15) -> if subType to World then return to else error ("DOM wasn't type World" ++ (show (zip (map fst props) ts)))
+      (760, 27) -> if subType to World then return to else error ("Bunch.prototype wasn't type World" ++ (show (zip (map fst props) ts)))
+      (1602, 12) -> if subType to World then return to else error ("ADSAFE wasn't type World" ++ (show (zip (map fst props) ts)))
+      otherwise -> return to
   EGetField _ e1 e2 -> do
     t1 <- typeCheck e1
     t2 <- typeCheck e2
@@ -160,7 +170,7 @@ typeCheck e = case e of
     t1 <- typeCheck e1
     t2 <- typeCheck e2
     t3 <- typeCheck e3
-    return JS
+    return (superType t1 t3) -- otherwise, the object could go from World->JS
   ELabel _ lbl e -> do
     te  <- typeCheck e
     labs <- get
@@ -238,7 +248,7 @@ globalEnv =
   , "Array", "$RegExp.prototype", "RegExp", "Date", "Number"
   , "$String.prototype", "String", "Boolean", "Error", "ConversionError"
   , "EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
-  , "uRIError", "this", "$makeException"
+  , "URIError", "this", "$makeException"
   ]
 
 isTypeable = runTyper . typeCheck . addGlobals . removeHOAS
