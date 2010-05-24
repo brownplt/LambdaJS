@@ -75,7 +75,7 @@ typeCheck e = case e of
   EBool _ _    -> return Safe
   ENull _ -> return Safe
   ELambda a xs e ->
-      let env' = M.fromList (map (\x -> if x == "this" then (x, JS) else (x, JS)) xs)
+      let env' = M.fromList (map (\x -> (x, JS)) xs)
       in local (M.union env') $ typeCheck e
   EId _ x -> do
     result <- asks $ M.lookup x
