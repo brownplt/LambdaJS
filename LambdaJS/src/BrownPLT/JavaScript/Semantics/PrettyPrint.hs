@@ -87,10 +87,10 @@ conv s = replace s "\\NUL" "\\0"
 
 expr :: ExprPos -> M Doc
 expr e = case e of
-  ENumber a n -> return $ text ((showNumber n) ++ show a)
-  EString a s -> return $ text (conv $ (show s ++ show a)) -- TODO: escaping from Haskell to Scheme?
-  EBool a True -> return $ text ("#t" ++ show a)
-  EBool a False -> return $text ("#f" ++ show a)
+  ENumber a n -> return $ text (showNumber n)
+  EString a s -> return $ text (conv $ show s) -- TODO: escaping from Haskell to Scheme?
+  EBool a True -> return $ text "#t"
+  EBool a False -> return $text "#f"
   EUndefined a -> return $ text "undefined"
   ENull a -> return $ text "null"
   ELambda a xs e -> do
