@@ -1,5 +1,5 @@
 LambdaJS Compiler and Related Tools.
-Copyright (c) 2009-2010 PLT Scheme Inc.
+Copyright (c) 2009-2010 Brown University and Claudiu Saftoiu.
 All Rights Reserved.
 
 /Desugar/Tests/ contains Mozilla Rhino and the SpiderMonkey test suite, used
