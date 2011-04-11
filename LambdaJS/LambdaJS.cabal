@@ -1,8 +1,8 @@
 Name:           LambdaJS
-Version:        1.0
+Version:        1.1
 Cabal-Version:	>= 1.2.3
-Copyright:      Copyright (c) 2009 Arjun Guha and Claudiu Saftoiu
-License:        GPL
+Copyright:      Copyright (c) 2009--2011 Brown University and Claudiu Saftoiu
+License:        BSD3
 License-file:   ../LICENSE
 Author:         Arjun Guha, Claudiu Saftoiu
 Maintainer:     Arjun Guha <arjun@cs.brown.edu>
