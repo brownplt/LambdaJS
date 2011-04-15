@@ -372,7 +372,7 @@
         "E-If-NotBool")
    ;no need for a separate while reduction rule
 
-   (--> (σ (in-hole H (break lbl_1 v)))
+   (--> (σ (in-hole H (break lbl_1 val)))
         (σ (err "missing label for break"))
         "Err-Break-No-Label")
    

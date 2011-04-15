@@ -92,6 +92,9 @@
            "failure"))
    "success")
  
+ (test (label x (break y (break x "success")))
+       "success")
+ 
 #|
 (test
  (get-field ((function (obj v) (set-field! obj "x" v)) (object ["y" "other"]) "new") "x")
