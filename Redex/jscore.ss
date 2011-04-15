@@ -275,6 +275,9 @@
         (break lbl_2 val)
         "E-Label-Pop"
         (side-condition (not (equal? (term lbl_1) (term lbl_2)))))
+   (==> (break lbl_1 (in-hole H (break lbl_2 val)))
+        (break lbl_2 val)
+        "E-Break-Break")
    (==> (label lbl_1 val)
         val
         "E-Label-Pop-NoBreak")
@@ -368,6 +371,10 @@
         (err "if not given a boolean test")
         "E-If-NotBool")
    ;no need for a separate while reduction rule
+
+   (--> (σ (in-hole H (break lbl_1 v)))
+        (σ (err "missing label for break"))
+        "Err-Break-No-Label")
    
    ;eval fails explicitly:
    (==> eval-semantic-bomb
