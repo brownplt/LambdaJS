@@ -42,16 +42,16 @@ globalEnv =
 
 
 
-check :: (ExprPos -> Either String typ) -> [Ident] -> String
-      -> Either String String
+check :: (ExprPos -> Maybe typ) -> [Ident] -> String
+      -> Maybe String
 check typeCheck freeIds src = 
   let expr = desugarExpr (parseExpr src) 
              (\body -> ELet nopos (map (\x -> (x, EUndefined nopos)) globalEnv) $ 
                        ELet nopos (map (\x -> (x, EUndefined nopos)) freeIds) $
                          body)
     in case typeCheck expr of
-         Right _ -> Right src
-         Left err -> Left err
+         Just _ -> Just src
+         Nothing -> Nothing
 
 checkStmt typeCheck freeIds src = 
   let expr = desugarStmt (parseStmt src) 
@@ -59,24 +59,22 @@ checkStmt typeCheck freeIds src =
                        ELet nopos (map (\x -> (x, EUndefined nopos)) freeIds) $
                          body)
     in case typeCheck expr of
-         Right _ -> Right src
-         Left err -> Left err
-
+         Just _ -> Just src
+         Nothing -> Nothing
 
 removeIdents (xs, ys) = (map snd xs, map snd ys)
-      
 
-safeExpressions :: (ExprPos -> Either String typ)
+safeExpressions :: (ExprPos -> Maybe typ)
                -> ([String], [String])
 safeExpressions tc =  removeIdents (partition f allExprs)
   where f (xs, e) = case check tc xs e of
-                      Right _ -> True
-                      Left _ -> False
+                      Just _ -> True
+                      Nothing -> False
 
 safeStatements tc = removeIdents (partition f statements)
   where f (xs, e) = case checkStmt tc xs e of
-                      Right _ -> True
-                      Left _ -> False
+                      Just _ -> True
+                      Nothing -> False
 
 
 

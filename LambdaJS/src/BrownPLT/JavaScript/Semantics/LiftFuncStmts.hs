@@ -6,7 +6,7 @@ module BrownPLT.JavaScript.Semantics.LiftFuncStmts
 
 import BrownPLT.JavaScript.Semantics.Prelude
 import BrownPLT.JavaScript
-
+import Data.Generics
 
 isFuncExpr :: Expression SourcePos -> Bool
 isFuncExpr (FuncExpr{}) = True

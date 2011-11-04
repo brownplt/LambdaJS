@@ -10,9 +10,7 @@ import MakeSafeSubset
 
 type Env = M.Map Ident T
 
-
 data T = TSafeString | TSafe | JS deriving (Show, Eq, Ord)
-
 
 subType x y | x == y = True
 subType TSafe JS = True
@@ -20,20 +18,12 @@ subType TSafeString TSafe = True
 subType TSafeString JS = True
 subType _ _ = False
 
-
 superType t1 t2 = case t1 `compare` t2 of
   LT -> t2
   GT -> t1
   EQ -> t1
 
-instance Monad (Either String) where
-  return x = Right x
-  fail s = Left s
-  (Right x) >>= f = f x
-  (Left s) >>= _ = Left s
-
-
-typeCheck :: Env -> ExprPos -> Either String T
+typeCheck :: Env -> ExprPos -> Maybe T
 typeCheck env e = case e of
    ENumber _ _ -> return TSafe
    EString _ "XMLHttpRequest" -> return JS
@@ -174,8 +164,8 @@ main = do
   putStrLn safeLookup
   putStrLn ""
   case check isTypeable [] safeLookup of
-    Right  _ -> putStrLn "lookup is typable."
-    Left err -> putStrLn err
+    Just _ -> putStrLn "lookup is typable."
+    Nothing -> putStrLn "ERROR: lookup is not typable."
   
 {-  putStrLn $ pretty $
     desugarExpr (parseExpr "obj[field] = e") 

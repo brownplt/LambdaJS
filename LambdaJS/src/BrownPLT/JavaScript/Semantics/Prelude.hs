@@ -3,31 +3,12 @@ module BrownPLT.JavaScript.Semantics.Prelude
   , everywhereUpto
   , everythingUpto
   , SourcePos
-  , module Data.Generics
   , Set
   ) where
 
 import Data.Generics
 import Data.Set (Set)
 import Text.ParserCombinators.Parsec.Pos (SourcePos, initialPos)
-
-instance Typeable SourcePos where
-  typeOf _  = 
-    mkTyConApp (mkTyCon "Text.ParserCombinators.Parsec.Pos.SourcePos") []
-
- 
--- Complete guesswork.  It seems to work.
--- This definition is incomplete.
-instance Data SourcePos where
-  -- We treat source locations as opaque.  After all, we don't have access to
-  -- the constructor.
-  gfoldl k z pos = z pos
-  toConstr _ = sourcePosConstr1 where
-    sourcePosConstr1 = mkConstr sourcePosDatatype "SourcePos" [] Prefix
-    sourcePosDatatype = mkDataType "SourcePos" [sourcePosConstr1]
-  gunfold   = error "gunfold is not defined for SourcePos"
-  dataTypeOf = error "dataTypeOf is not defined for SourcePos"
-
 
 collectExclude :: Data r
                => GenericQ Bool -- ^descend into a subtree?
