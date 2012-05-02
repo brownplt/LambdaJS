@@ -11,9 +11,9 @@ src=$1
 
 echo "Running on $1 ..."
 goldImpl=$2
-testPath=`mktemp -t lambdaJS1`
-goldOutput=`mktemp -t lambdaJS2`
-newOutput=`mktemp -t lambdaJS3`
+testPath=`mktemp -t lambdaJS1XXX`
+goldOutput=`mktemp -t lambdaJS2XXX`
+newOutput=`mktemp -t lambdaJS3XXX`
 
 trap "rm -f $testPath $goldOutput $newOutput" EXIT
 
