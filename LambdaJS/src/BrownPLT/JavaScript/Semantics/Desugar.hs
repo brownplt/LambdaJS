@@ -695,8 +695,9 @@ forInit env (VarInit decls) = foldr (ESeq nopos) (EUndefined nopos) (map (varDec
 forInit env (ExprInit e) = expr env e
 
 
-catchClause :: Env -> CatchClause SourcePos -> ExprPos
-catchClause env (CatchClause a1 (Id a2 x) s) = ELambda nopos [x] $
+catchClause :: Env -> Maybe (CatchClause SourcePos) -> ExprPos
+catchClause env Nothing = ELambda nopos ["x"] (EUndefined nopos)
+catchClause env (Just (CatchClause a1 (Id a2 x) s)) = ELambda nopos [x] $
   ELet a1 [(x, ERef nopos (EId a2 x))] (stmt env' s)
   where env' = M.insert x True env
 
@@ -738,12 +739,10 @@ stmt env s = case s of
     eFor (forInit env init) (maybeExpr env incr)
          (toBoolean $ maybeExpr env test) (stmt env body)
   ThrowStmt a e -> EThrow a (expr env e)
-  TryStmt a body catches finally -> -- TODO:  Not sure what gets nopos here
+  TryStmt a body catch finally -> -- TODO:  Not sure what gets nopos here
       EFinally a withoutFinally (maybeStmt env finally)
           where withoutFinally = 
-                    foldl (\body catch -> ECatch nopos body (catchClause env catch)) 
-                              (stmt env body)
-                              catches
+                  ECatch nopos (stmt env body) (catchClause env catch)
   BreakStmt a Nothing -> EBreak a "$break" (EUndefined nopos)
   BreakStmt a (Just (Id _ lbl)) -> EBreak a lbl (EUndefined nopos)
   ContinueStmt a Nothing -> EBreak a "$continue" (EUndefined nopos)

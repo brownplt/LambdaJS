@@ -43,9 +43,8 @@ stmt s = case s of
   BreakStmt _ _ -> []
   ContinueStmt _ _ -> []
   LabelledStmt _ _ s -> stmt s
-  TryStmt _ s catches Nothing -> stmt s ++ concatMap catchClause catches
-  TryStmt _ s catches (Just s') -> 
-    stmt s ++ concatMap catchClause catches ++ stmt s'
+  TryStmt _ s catches finally -> 
+    stmt s ++ maybe [] catchClause catches ++ maybe [] stmt finally
   ThrowStmt _ _ -> []
   ReturnStmt _ _ -> []
   WithStmt _ _ s -> stmt s
