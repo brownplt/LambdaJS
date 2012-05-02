@@ -25,7 +25,7 @@ Library
     syb >= 0.1,
     WebBits >= 2.1
   ghc-options:
-    -fwarn-incomplete-patterns
+    -fwarn-incomplete-patterns 
   Extensions:     
     DeriveDataTypeable Rank2Types FlexibleInstances
   Exposed-Modules:
@@ -55,7 +55,7 @@ Executable lambdaJS
     syb >= 0.1,
     WebBits >= 2.1
   ghc-options:
-    -fwarn-incomplete-patterns
+    -fwarn-incomplete-patterns -rtsopts
   Extensions:     
     DeriveDataTypeable Rank2Types FlexibleInstances
 

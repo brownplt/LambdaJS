@@ -5,4 +5,4 @@ then
   exit 65
 fi
 
-./dist/build/lambdaJS/lambdaJS --desugar < $1
+./dist/build/lambdaJS/lambdaJS +RTS -K100m -RTS --desugar < $1
