@@ -94,7 +94,7 @@ eArgumentsObj es callee = EObject  nopos (
   [("length", ENumber nopos $ fromIntegral $ length es),
    ("callee", callee),
    ("$class", EString nopos "Object"),
-   ("$proto", EId nopos "$Object.prototype"),
+   ("$proto", EId nopos "@Object_prototype"),
    ("$isArgs", EBool nopos True) --used in apply to check correct type
    ] ++
   (map (\ix -> (show ix, (es !! ix))) [0..((length es)-1)]))
@@ -112,14 +112,12 @@ applyObj efuncobj ethis es = ELet1 nopos efuncobj $ \x ->
 strictEquality :: ExprPos -> ExprPos -> ExprPos
 strictEquality =  eStxEq
 
--- |Algorithm 9.9 of ECMA-262, ed. 3.
 --if given an object, expects it to be a (ERef (EObject))
 --it itself returns Refs
-toObject :: ExprPos -> ExprPos
 toObject e = 
   ELet1 nopos e $ \x -> 
     EIf nopos (typeIs (EId nopos x) "undefined")
-        (EThrow nopos $ newError "TypeError" "toObject received undefined") $        
+        (EThrow nopos $ newError "TypeError" "toObject received undefined") $  
     EIf nopos (eStxEq (EId nopos x) (ENull nopos))
         (EThrow nopos $ newError "TypeError" "toObject received null") $
     EIf nopos (typeIs (EId nopos x) "boolean") 
@@ -139,7 +137,6 @@ toObject e =
           , ("$value", EId nopos x)
           , ("length", EOp nopos OStrLen [EId nopos x])]) $
     (EId nopos x)
-
 
 -- |According to the specification, toPrimitive may signal a TypeError.
 -- this is generalized to do either toString first, or valueOf first,
@@ -432,7 +429,7 @@ eNewDirect eConstr argumentObj =
           ELet nopos [("$protoObj",
                  EIf nopos (isRefComb isObject (EId nopos "$protoField"))
                      (EId nopos "$protoField")
-                     (EId nopos "$Object.prototype"))] $
+                     (EId nopos "@Object_prototype"))] $
             ELet nopos [("$newObj", 
                    ERef nopos $ EObject nopos [("$constructing", EBool nopos True),
                                    ("$class", EString nopos "Object"),
@@ -556,7 +553,7 @@ expr env e = case e of
   ObjectLit a ps -> ERef a $ EObject nopos $ 
     proto:("$class", EString nopos"Object"):
       (map (\(p,e') -> (prop p, expr env e')) ps)
-      where proto = ("$proto", EId nopos "$Object.prototype")
+      where proto = ("$proto", EId nopos "@Object_prototype")
   ThisRef a -> EId a "this" 
   VarRef _ (Id _ s) -> eVarRef env s
   -- PrefixDelete assumes that DotRef and BracketRef are desugared to iimmediate
@@ -625,7 +622,7 @@ expr env e = case e of
                             ("arguments", arguments),
                             ("prototype", prototype),
                             ("$strRep", EString nopos strRep),
-                            ("$proto", EId nopos "$Function.prototype")]
+                            ("$proto", EId nopos "@Function_prototype")]
       where s = BlockStmt a (liftFuncStmts [unliftedStmt])
             arg x ix = case x `S.member` assignableArgs of
               True -> ERef a $ EGetField nopos (EDeref nopos $ EDeref nopos (EId nopos "arguments"))
@@ -643,7 +640,7 @@ expr env e = case e of
                      formals $ 
                      ELet nopos locals $
                        ELabel nopos "$return" (stmt env' s)
-            prototype = ERef nopos $ EObject nopos [("$proto", EId nopos "$Object.prototype"),
+            prototype = ERef nopos $ EObject nopos [("$proto", EId nopos "@Object_prototype"),
                                         ("$class", EString nopos "Object")]
             arguments = ENull nopos
             vars = localVars s

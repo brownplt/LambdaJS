@@ -1,5 +1,6 @@
 module Main where
 
+import LambdaJS.Parser (parseBinds)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -15,9 +16,11 @@ import Text.PrettyPrint.HughesPJ
 
 
 desugarMain opts = do
-  env <- return $ case opts of
-           [] -> ecma262Env
-           [NoEnv] -> id
+  env <- case opts of
+           [EnvFile envFileName] -> do
+             f <- getEnvTransformer envFileName
+             return (\e -> f (ecma262Env e))
+           [NoEnv] -> return id
            otherwise -> fail "spurious command-line arguments"
   str <- getContents
   case parseScriptFromString "<stdin>" str of
@@ -51,6 +54,11 @@ testCases = do
   eof
   return $ parens (vcat tests)
 
+getEnvTransformer fileName = do
+  src <- readFile fileName
+  case parseBinds fileName src of
+    Left err -> fail (show err)
+    Right f -> return f
 
 testCaseMain [] = do
   src <- getContents
@@ -64,11 +72,13 @@ testCaseMain _ =
 data Flag
   = Action ([Flag] -> IO ())
   | NoEnv
+  | EnvFile String
 
 options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
   , Option [] ["test-cases"] (NoArg (Action testCaseMain)) "desugar test cases"
+  , Option [] ["env"] (ReqArg EnvFile "FILENAME") "parse environment"
   , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
   ]
 

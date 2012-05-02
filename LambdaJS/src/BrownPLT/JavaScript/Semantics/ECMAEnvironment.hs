@@ -24,9 +24,9 @@ functionObject :: [Ident] -> ExprPos -> ExprPos
 functionObject args body = ERef nopos $ object 
   [ ("$code", lambda args body)
   , ("arguments", ENull nopos)
-  , ("prototype", ERef nopos $ object [("$proto", EId nopos "$Object.prototype")])
+  , ("prototype", ERef nopos $ object [("$proto", EId nopos "@Object_prototype")])
 --  , ("$class", EString "Function")
-  , ("$proto", EId nopos "$Function.prototype")
+  , ("$proto", EId nopos "@Function_prototype")
   , ("length", ENumber nopos (fromIntegral $ length args))
   , ("$strRep", EString nopos "function fromafunctionboject(){}")
   ]
@@ -49,7 +49,7 @@ asVariables binds = map (\(x, e) -> (x, ERef nopos e)) binds
 -- |Section 15.1
 globalValuesAndFunctions :: [(Ident, ExprPos)] 
 globalValuesAndFunctions = 
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "global")
   , ("NaN", ENumber nopos (0.0/0.0))
   , ("Infinity", ENumber nopos (1.0/0.0))
@@ -100,7 +100,7 @@ globalValuesAndFunctions =
   , ("print", functionObject ["V"] $ EOp nopos OPrint [toString (EId nopos "V")])
   , ("Math", ERef nopos $ object $
     [ ("$class", EString nopos "Math")
-    , ("$proto", EId nopos "$Object.prototype") 
+    , ("$proto", EId nopos "@Object_prototype") 
     , ("E", ENumber nopos (exp 1))
     , ("LN10", ENumber nopos (log 10))
     , ("LN2", ENumber nopos (log 2))
@@ -239,7 +239,7 @@ arrayJoinLocale = parseSrc "function () {      \n\
 -- |Section 15.4.4
 arrayPrototype :: ExprPos
 arrayPrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Object")
   , ("length", ENumber nopos 0)
   , ("constructor", EUndefined nopos) -- Set to Array later
@@ -287,7 +287,7 @@ arrayPrototype = object
 -- |Section 15.4.4
 regExpPrototype :: ExprPos
 regExpPrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Object")
   , ("length", ENumber nopos 0)
   , ("constructor", EUndefined nopos) -- Set to RegExp later
@@ -308,15 +308,15 @@ regExpPrototype = object
 -- |Sections 15.2.1 and 15.2.2
 jsObject :: ExprPos
 jsObject = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype") -- Yes, this is correct.
-  , ("prototype", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Function_prototype") -- Yes, this is correct.
+  , ("prototype", EId nopos "@Object_prototype")
   , ("length", ENumber nopos 1)
   , ("$code", lambda ["value"] $ 
        EIf nopos (EIf nopos (EOp nopos OStrictEq [EId nopos "value", (EUndefined nopos)])
                 (EBool nopos True)
                 (EOp nopos OStrictEq [EId nopos "value", ENull nopos]))
            (ERef nopos $ object [ ("$class", EString nopos "Object")
-                          , ("$proto", EId nopos "$Object.prototype")
+                          , ("$proto", EId nopos "@Object_prototype")
                           ])
            (toObject (EId nopos "value")))
   ]
@@ -334,7 +334,7 @@ getFieldT = getField (EId nopos "this")
 -- TODO: make it work as a non-constr too
 jsArray :: ExprPos
 jsArray = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("length", ENumber nopos 1)
   , ("prototype", EId nopos "$Array.prototype")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Array")
@@ -377,7 +377,7 @@ jsArray = ERef nopos $ object
 --and the flags used for construction are in $regexpFlags. 
 --these are used by Scheme's perl regexp thing 
 jsRegExp = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("prototype", EId nopos "$RegExp.prototype")
   , ("length", ENumber nopos 2)
   , ("$code", constr) ]
@@ -430,22 +430,22 @@ jsFunction = ERef nopos $ object
     ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
                                  (EString nopos "length"))] $
       EIf nopos (eStxEq (EId nopos "$numArgs") (ENumber nopos 0))
-          (setFieldTS (EString nopos "$proto") (EId nopos "$Function.prototype") $
+          (setFieldTS (EString nopos "$proto") (EId nopos "@Function_prototype") $
            setFieldTS (EString nopos "$class") (EString nopos "Function") $
            setFieldTS (EString nopos "length") (ENumber nopos 0) $
            (EUndefined nopos))
           (EEval nopos))
    -- Both .prototype and .[[Prototype]] reference the same object.
-  , ("$proto", EId nopos "$Function.prototype")
+  , ("$proto", EId nopos "@Function_prototype")
   , ("$class", EString nopos "Function") --TODO: not sure if this should be here
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Function")
-  , ("prototype", EId nopos "$Function.prototype")
+  , ("prototype", EId nopos "@Function_prototype")
   , ("length", ENumber nopos 1)
   ]
 
 
 jsBoolean = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Boolean")
   , ("prototype", EId nopos "$Boolean.prototype")
@@ -461,7 +461,7 @@ jsBoolean = ERef nopos $ object
 --stringzzzz
 --internal value held in $value
 jsString = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "String")
   , ("prototype", EId nopos "$String.prototype")
@@ -482,7 +482,7 @@ jsString = ERef nopos $ object
 
 jsDate :: ExprPos
 jsDate = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Date")
   , ("length", ENumber nopos 7)
@@ -504,7 +504,7 @@ jsDate = ERef nopos $ object
 
 jsNumber :: ExprPos
 jsNumber = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype")
+  [ ("$proto", EId nopos "@Function_prototype")
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Number")
   , ("length", ENumber nopos 1)
@@ -537,7 +537,7 @@ jsNumber = ERef nopos $ object
 functionPrototypeValues :: [(Ident,ExprPos)]
 functionPrototypeValues = 
   [ -- In Safari 4.0, Function.prototype instanceof Object and not of Function
-    ("$proto", EId nopos "$Object.prototype")
+    ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos "function () {\n}")
   , ("constructor", EUndefined nopos) -- Set to Function later
@@ -585,7 +585,7 @@ hasClass eObj cls = eStxEq (getField eObj (EString nopos "$class")) (EString nop
 -- |Section 15.6.4
 booleanPrototype :: ExprPos
 booleanPrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Boolean")
   , ("$value", EBool nopos False)
   , ("constructor", EUndefined nopos) -- Set to Boolean later
@@ -599,7 +599,7 @@ booleanPrototype = object
 -- |Section 15.5.3.1
 stringPrototype :: ExprPos
 stringPrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "String") --yep, it's a string.
   , ("$value", EString nopos "")
   , ("constructor", EUndefined nopos) -- Set to String later
@@ -656,7 +656,7 @@ stringPrototype = object
 
 numberPrototype :: ExprPos
 numberPrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Number")
   , ("$value", ENumber nopos 0)
   , ("constructor", EUndefined nopos) -- Set to Number later
@@ -676,7 +676,7 @@ numberPrototype = object
 
 datePrototype :: ExprPos
 datePrototype = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Date")
   , ("$value", ENumber nopos (0.0/0.0))
   , ("constructor", (EUndefined nopos)) -- Set to Date later
@@ -729,7 +729,7 @@ datePrototype = object
 --all errors are exactly the same, so these functions actually
 --generate an error of a given name.
 jsError protname = ERef nopos $ object
-  [ ("$proto", EId nopos "$Function.prototype") 
+  [ ("$proto", EId nopos "@Function_prototype") 
   , ("$class", EString nopos "Function")
   , ("$strRep", EString nopos $ nativeFunctionStrRep "Error")
   , ("length", ENumber nopos 1)
@@ -742,7 +742,7 @@ jsError protname = ERef nopos $ object
                     (EUndefined nopos))))
   ]
 errorPrototype name = object
-  [ ("$proto", EId nopos "$Object.prototype")
+  [ ("$proto", EId nopos "@Object_prototype")
   , ("$class", EString nopos "Error")
   , ("constructor", EUndefined nopos) -- Set to be itself later
   , ("name", EString nopos name)
@@ -753,32 +753,42 @@ errorPrototype name = object
   ]
 
 
+constrNames = 
+  ["@Object_prototype", 
+   "@Function_prototype", 
+   "$Array.prototype", 
+   "$String.prototype",
+   "$RegExp.prototype", 
+   "$Date.prototype", 
+   "$Boolean.prototype",
+   "$Number.prototype", 
+   "$Error.prototype", 
+   "$ConversionError.prototype", 
+   "$EvalError.prototype", 
+   "$RangeError.prototype",
+   "$ReferenceError.prototype", 
+   "$SyntaxError.prototype", 
+   "$TypeError.prototype", 
+   "$URIError.prototype"]
+
 setConstructors :: ExprPos
-setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit
-  ["Object", "Function", "Array", "String", "RegExp", "Date", "Boolean",
-   "Number", "Error", "ConversionError", "EvalError", "RangeError",
-   "ReferenceError", "SyntaxError", "TypeError", "URIError"]
+setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
  where
-  doit name = ESetRef nopos (EId nopos ("$" ++ name ++ ".prototype"))
-                (EUpdateField nopos (EDeref nopos $ EId nopos ("$" ++ name ++ ".prototype"))
+  doit name = ESetRef nopos (EId nopos name)
+                (EUpdateField nopos (EDeref nopos $ EId nopos name)
                               (EString nopos "constructor")
                               (EDeref nopos $ EId nopos name))
   
 ecma262Env :: ExprPos -> ExprPos
 ecma262Env body = 
-  --global is the initial object, at location 0
-  ELet nopos [("$global", ERef nopos $ object [])] $
   --we immediately need function.prototype, since everything uses it
-  ELet nopos [("$Object.prototype", ERef nopos $ object [])] $
-  ELet nopos [("$Function.prototype", ERef nopos $ object [])] $
-
   ELet nopos [("$makeException", 
               ELambda nopos ["name", "msg"] $ eNew 
                 (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
                 [EId nopos "msg"])] $          
 
-  updateObject (EId nopos "$Object.prototype") objectPrototypeValues $
-  updateObject (EId nopos "$Function.prototype") functionPrototypeValues $
+  updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
+  updateObject (EId nopos "@Function_prototype") functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
   ELet nopos [("$Number.prototype", ERef nopos numberPrototype)] $
   ELet nopos [("$Array.prototype", ERef nopos arrayPrototype)] $

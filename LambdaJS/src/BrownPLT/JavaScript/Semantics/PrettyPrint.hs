@@ -1,5 +1,6 @@
 module BrownPLT.JavaScript.Semantics.PrettyPrint
   ( pretty
+  , op
   , renderExpr
   ) where
 
