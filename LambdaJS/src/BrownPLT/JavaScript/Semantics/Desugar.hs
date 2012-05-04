@@ -6,7 +6,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , toString, toNumber, toObject, toBoolean
   , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation, isPrim
   , isFunctionObj
-  , primToStr, primToNum
+  , primToStr, primToNum, toPrimitive, strictEquality, abstractEquality
   , applyObj
   , eAnd, eNot, eOr, eStxEq, eNew, eNewDirect, eFor, eArgumentsObj
   , getValue, newError, getGlobalVar
@@ -162,146 +162,8 @@ abstractEquality e1 e2 = ELet nopos [("$lhs", e1), ("$rhs", e2)] $
 
 
       
---(in order of appearance in the spec)
 infixOp :: InfixOp -> ExprPos -> ExprPos -> ExprPos
-infixOp op e1 e2 = case op of
-  --ECMA 11.5. 
-  OpMul -> o OMul
-  OpDiv -> o ODiv
-  OpMod -> o OMod
-  
-  --ECMA 11.6.1, preserve order of operations
-  OpAdd -> 
-    binds e1 e2 $ 
-      -- In our paper, we state that
-      --   desugar[[e1 + e2]] = let (x = desugar[[e1]], y = desugar[[e2]]) ...
-      -- This isn't quite the case, but in toPrimitive, desugar[[e1]] and
-      -- desugar[[e2]] are let-bound, so it's more like:
-      --   desugar[[e1 + e2]] = let (x = let (obj = desugar[[e1]]) ..., 
-      --                             y = let (obj = desugar[[e2]]) ...) ...
-      -- which can still be expressed as a two-holed context.
-      ELet nopos [("$addLhs", toPrimitive (EId nopos "$opLhs")),
-            ("$addRhs", toPrimitive (EId nopos "$opRhs"))] $
-        EIf nopos (eOr (typeIs (EId nopos "$addLhs") "string")
-                 (typeIs (EId nopos "$addRhs") "string"))
-            --we can use prim->str and prim->num here instead
-            --of toString/toNumber because the exprs are already
-            --converted to primitives.
-            (EOp nopos OStrPlus [primToStr $ EId nopos "$addLhs",
-                           primToStr $ EId nopos "$addRhs"])
-            (EOp nopos ONumPlus [primToNum $ EId nopos "$addLhs", 
-                           primToNum $ EId nopos "$addRhs"])  
-  OpSub -> o OSub --11.6.2
-  
-  OpLShift -> shift OLShift 
-  OpSpRShift -> shift OSpRShift
-  OpZfRShift -> shift OZfRShift
-    
-  OpLT -> binds e1 e2 $ checkLtGt $ lt (EId nopos "$opLhs") (EId nopos "$opRhs")
-  OpGT -> binds e1 e2 $ checkLtGt $ lt (EId nopos "$opRhs") (EId nopos "$opLhs") 
-  OpLEq -> binds e1 e2 $ checkLeqGeq $ lt (EId nopos "$opRhs") (EId nopos "$opLhs")
-  OpGEq -> binds e1 e2 $ checkLeqGeq $ lt (EId nopos "$opLhs") (EId nopos "$opRhs") 
-
-  --11.8.6, 15.3.5.3
-  OpInstanceof -> ELet nopos [("$lhs", e1), ("$rhs", e2)] $
-    EIf nopos (eNot (isRefComb isFunctionObj (EId nopos "$rhs"))) 
-      (EThrow nopos $ newError "TypeError" "instanceof args of wrong type") $
-      EIf nopos (eNot $ isRefComb isObject (EId nopos "$lhs")) (EBool nopos False) $
-        ELet1 nopos (EGetField nopos (EDeref nopos $EId nopos "$rhs") (EString nopos "prototype")) $ \fProt ->
-        ELet2 nopos (ERef nopos $ EId nopos "$lhs") (ERef nopos (EBool nopos False))$ \curLHS res ->
-          ESeq nopos
-            (ELabel nopos "$break" $ 
-              --while the curLHS isn't null:
-              EWhile nopos (eNot $ isNull (EDeref nopos $ EId nopos curLHS)) $
-                --if it matches the rhs.prototype, we're done
-                EIf nopos (eStxEq (EDeref nopos $ EId nopos curLHS) (EId nopos fProt))
-                 (ESeq nopos (ESetRef nopos (EId nopos res) (EBool nopos True))
-                       (EBreak nopos "$break" (EUndefined nopos)))
-                 --otherwise go up once the prototype chain
-                 (ESetRef nopos (EId nopos curLHS) (EGetField nopos (EDeref nopos $EDeref nopos $ EId nopos curLHS) 
-                                                  (EString nopos "$proto"))))
-            (EDeref nopos $ EId nopos res)
-
-  OpIn -> ELet2 nopos (toString e1) (toObject e2) $ \fieldId objId -> 
-    EOp nopos OHasOwnProp [EDeref nopos $ EId nopos objId, EId nopos fieldId]
-  OpEq -> abstractEquality e1 e2
-  OpNEq -> eNot $ abstractEquality e1 e2
-  OpStrictEq -> strictEquality e1 e2
-  OpStrictNEq -> eNot $ strictEquality e1 e2
-
-  OpBAnd -> bitop OBAnd
-  OpBXor -> bitop OBXOr
-  OpBOr  -> bitop OBOr
-  
-  --note: i think their "GetValue" is our equivalent
-  --of "VarRef".? for example, if you have:
-  --a && b
-  --you don't want b to be reduced to an (object), because if you
-  --do: print(a&&b), b must be a ref to to the tostring conv. properly.
-  OpLAnd -> 
-    ELet nopos [("$lAnd", e1)] $
-      EIf nopos (eNot $ toBoolean (EId nopos "$lAnd"))
-          (EId nopos "$lAnd")
-          e2
-  OpLOr -> 
-    ELet nopos [("$lOr", e1)] $
-      EIf nopos (toBoolean (EId nopos "$lOr"))
-          (EId nopos  "$lOr")
-          e2
-    
-  where 
-    --steps 1-4 of the algs
-    binds l r e =
-      ELet nopos [("$opLhs", l),
-                  ("$opRhs", r)] e
-    --bit-shifts (11.7.1) 
-    shift eop =
-      binds e1 e2 $ 
-        --toint32 only takes numbers, so must do that here:
-        ELet nopos [("$lhsShift", EOp nopos OToInt32 [toNumber (EId nopos "$opLhs")]),
-              ("$rhsShift", EOp nopos OToUInt32 [toNumber (EId nopos "$opRhs")])] $
-          ELet nopos [("$rhsShift2", EOp nopos OBAnd [EId nopos "$rhsShift", 
-                                          --OToInteger is a technical
-                                          --workaround to make sure we have
-                                          --a plain integer in the Scheme
-                                          EOp nopos OToInteger [ENumber nopos 0x1F]])] $
-            (EOp nopos eop [EId nopos "$lhsShift", EId nopos "$rhsShift2"])
-    -- *, -, /, etc
-    o eop = 
-      binds e1 e2 $ 
-        ELet nopos [("$opLhs2", toNumber (EId nopos "$opLhs")),
-              ("$opRhs2", toNumber (EId nopos "$opRhs"))] $
-          EOp nopos eop [EId nopos "$opLhs2", EId nopos "$opRhs2"]
-    --alg 11.8.5
-    lt e1 e2 = 
-      ELet nopos [("$ltLhs", toPrimitive e1),
-            ("$ltRhs", toPrimitive e2)] $
-        EIf nopos (eAnd (typeIs (EId nopos "$ltLhs") "string")
-                  (typeIs (EId nopos "$ltRhs") "string"))
-            (EOp nopos OStrLt [EId nopos "$ltLhs", EId nopos "$ltRhs"])
-            (EOp nopos OLt    [primToNum $ EId nopos "$ltLhs", 
-                         primToNum $ EId nopos "$ltRhs"])
-    --step 6 of <, >
-    checkLtGt e =
-      ELet nopos [("$res", e)] $
-        EIf nopos (typeIs (EId nopos "$res") "undefined")
-            (EBool nopos False)
-            (EId nopos "$res")
-    --step 6 of <=, >= 
-    checkLeqGeq e = 
-      ELet nopos [("$res", e)] $
-        EIf nopos (eOr (typeIs (EId nopos "$res") "undefined")
-                 (EId nopos "$res"))
-            (EBool nopos False)
-            (EBool nopos True)
-    bitop eop = 
-      binds e1 e2 $ 
-        ELet nopos [("$bitLhs", EOp nopos OToInt32 [toNumber (EId nopos "$opLhs")]),
-              ("$bitRhs", EOp nopos OToInt32 [toNumber (EId nopos "$opRhs")])] $
-          EOp nopos eop [EId nopos "$bitLhs", EId nopos "$bitRhs"]
-                      
-
- 
+infixOp op e1 e2 = EApp nopos (EId nopos ("@" ++ show op)) [e1, e2]
 
 prefixOp :: PrefixOp -> ExprPos -> ExprPos
 prefixOp op e = case op of 
