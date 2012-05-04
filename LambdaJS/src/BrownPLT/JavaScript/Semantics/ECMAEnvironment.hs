@@ -996,6 +996,12 @@ ecma262Env body =
                 [EId nopos "msg"])] $
   ELet nopos [("@toPrimitive_String", toPrimitive' "toString" "valueOf")] $
   ELet nopos [("@toPrimitive_Number", toPrimitive' "valueOf" "toString")] $
+  --ECMA 9.3
+  --once again, must get object refs to pass them in as 'this' in toPrimitive
+  ELet nopos [("@toNumber", ELambda nopos ["$toNum"] $
+                EIf nopos (isLocation (EId nopos "$toNum"))
+                    (primToNum $ toPrimitive_Number (EId nopos "$toNum"))
+                    (primToNum (EId nopos "$toNum")))] $
   ELet nopos [makeInfixOp OpGT] $
   ELet nopos [makeInfixOp OpLT] $
   ELet nopos [makeInfixOp OpGEq] $

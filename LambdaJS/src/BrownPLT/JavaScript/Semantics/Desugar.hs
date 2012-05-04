@@ -7,6 +7,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation, isPrim
   , isFunctionObj
   , primToStr, primToNum, toPrimitive, strictEquality, abstractEquality
+  , toPrimitive_Number
   , applyObj
   , eAnd, eNot, eOr, eStxEq, eNew, eNewDirect, eFor, eArgumentsObj
   , getValue, newError, getGlobalVar
@@ -118,23 +119,10 @@ strictEquality =  eStxEq
 
 toObject e = EApp nopos (EId nopos "@toObject") [e]
 
-toPrimitive_String e = 
-  EApp nopos (EId nopos "@toPrimitive_String") [e]
-toPrimitive_Number e = 
-  EApp nopos (EId nopos "@toPrimitive_Number") [e]
+toPrimitive_String e = EApp nopos (EId nopos "@toPrimitive_String") [e]
+toPrimitive_Number e = EApp nopos (EId nopos "@toPrimitive_Number") [e]
 toPrimitive = toPrimitive_Number
-
-
---ECMA 9.3
---once again, must get object refs to pass them in as 'this' in toPrimitive
-toNumber :: ExprPos -> ExprPos
-toNumber e = 
-  ELet nopos [("$toNum", e)] $
-    EIf nopos (isLocation (EId nopos "$toNum"))
-        (primToNum $ toPrimitive_Number (EId nopos "$toNum"))
-        (primToNum (EId nopos "$toNum"))
-
-
+toNumber e = EApp nopos (EId nopos "@toNumber") [e]
 toBoolean = primToBool
 
 
