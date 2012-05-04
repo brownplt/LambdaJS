@@ -190,23 +190,23 @@ makeInfixOp op =
   ("@" ++ show op,
    ELambda nopos ["@x", "@y"] (infixOp' op (EId nopos "@x") (EId nopos "@y")))
 
+
+-- It is strange that that the subterm of delete is an expression and not
+-- an l-value.  Note that that delete has no effect when its subexpression
+-- is not l-value like.
+delete = ELambda nopos ["$delObj", "$delStr"] $
+  EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", 
+             EId nopos "$delStr"])
+      (ESeq nopos
+        (ESetRef nopos (EId nopos "$delObj")
+          (EDeleteField nopos (EDeref nopos $ EId nopos "$delObj") 
+                           (EId nopos "$delStr")))
+        (EBool nopos True))
+      (EBool nopos False)
+
 prefixOp' :: PrefixOp -> ExprPos -> ExprPos
 prefixOp' op e = case op of 
-  -- It is strange that that the subterm of delete is an expression and not
-  -- an l-value.  Note that that delete has no effect when its subexpression
-  -- is not l-value like.
-  PrefixDelete -> case e of
-    EGetField a1 (EDeref a2 eObj) eString ->
-      ELet nopos [("$delObj", eObj),
-            ("$delStr", eString)] $
-        EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", EId nopos "$delStr"])
-            (ESeq nopos
-              (ESetRef nopos (EId nopos "$delObj")
-                (EDeleteField a1 (EDeref a2 $ EId nopos "$delObj") (EId nopos "$delStr")))
-              (EBool nopos True))
-            (EBool nopos False)
-    otherwise -> EBool nopos True
-    
+  PrefixDelete -> error "Delete operator treated specially"
   PrefixVoid -> ESeq nopos (getValue e) (EUndefined nopos)
   --TODO: make sure step 3 in 11.4.3 makes sense for our typeof:
   PrefixTypeof -> EOp nopos OSurfaceTypeof [getValue e]
@@ -1098,7 +1098,7 @@ ecma262Env body =
   ELet nopos [makePrefixOp PrefixMinus] $
   ELet nopos [makePrefixOp PrefixTypeof] $
   ELet nopos [makePrefixOp PrefixVoid] $
-  ELet nopos [makePrefixOp PrefixDelete] $
+  ELet nopos [("@delete", delete)] $
   ELet nopos [("@setArray", setArray)] $
   updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
   updateObject (EId nopos "@Function_prototype") functionPrototypeValues $

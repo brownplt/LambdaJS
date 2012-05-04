@@ -128,7 +128,12 @@ toString e =
 
 infixOp op e1 e2 = EApp nopos (EId nopos ("@" ++ show op)) [e1, e2]
 
-prefixOp op e = EApp nopos (EId nopos ("@" ++ show op)) [e]
+prefixOp op e = case op of
+  PrefixDelete -> case e of
+    EGetField a1 (EDeref a2 eObj) eString ->
+      EApp nopos (EId nopos "@delete") [eObj, eString]
+    otherwise -> EBool nopos True
+  otherwise -> EApp nopos (EId nopos ("@" ++ show op)) [e]
 
 type Env = M.Map Ident Bool
 
