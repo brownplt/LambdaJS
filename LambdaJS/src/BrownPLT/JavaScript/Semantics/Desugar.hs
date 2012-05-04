@@ -80,7 +80,9 @@ isFunctionObj e = ELet nopos [("$isF", e)] $
   eAnd (isObject (EId nopos "$isF"))
        (isLambda (EGetField nopos (EId nopos "$isF") (EString nopos "$code")))
 --combinator for refs:      
-isRefComb f e = eAnd (isLocation e) (f (EDeref nopos e))
+isRefComb f e = 
+  EApp nopos (EId nopos "@isRefComb") 
+    [ELambda nopos ["@x"] (f (EId nopos "@x")), e]
 
 
 primToNum e = EOp (label e) OPrimToNum [e]
