@@ -9,7 +9,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , primToStr, primToNum, toPrimitive, strictEquality, abstractEquality
   , toPrimitive_Number
   , applyObj
-  , eAnd, eNot, eOr, eStxEq, eNew, eNewDirect, eFor, eArgumentsObj
+  , eAnd, eNot, eOr, eNew, eNewDirect, eFor, eArgumentsObj
   , getValue, newError, getGlobalVar
   , typeIs
   ) where
@@ -49,10 +49,6 @@ boolExpr e = case e of
 
 getGlobalVar fname = EGetField nopos (EDeref nopos $ EId nopos "$global") (EString nopos fname)
 
-eStxEq :: ExprPos -> ExprPos -> ExprPos
-eStxEq e1 e2 = EOp nopos OStrictEq [e1, e2]
-
-
 --turn 2 boolean exprs into 1 expr that is the or/and
 eAnd e1 e2 = EIf nopos e1 e2 (EBool nopos False)
 eOr e1 e2 = ELet nopos [("$or", e1)] $ EIf nopos (EId nopos "$or") (EId nopos "$or") e2
@@ -60,7 +56,7 @@ eNot e1 = EIf nopos e1 (EBool nopos False) (EBool nopos True)
 
 
 typeIs :: ExprPos -> String -> ExprPos
-typeIs e s = eStxEq (EOp nopos OTypeof [e]) (EString nopos s)
+typeIs e s = strictEquality (EOp nopos OTypeof [e]) (EString nopos s)
 
 
 --get the base value if it's a reference. 
@@ -78,7 +74,7 @@ isString e = typeIs e "string"
 isPrim e = EOp nopos OIsPrim [e]
 isNumber e = typeIs e "number"
 isUndefined e = typeIs e "undefined"
-isNull e = eStxEq e (ENull nopos)
+isNull e = strictEquality e (ENull nopos)
 isFunctionObj e = ELet nopos [("$isF", e)] $ 
   eAnd (isObject (EId nopos "$isF"))
        (isLambda (EGetField nopos (EId nopos "$isF") (EString nopos "$code")))
@@ -112,13 +108,8 @@ applyObj efuncobj ethis es = ELet1 nopos efuncobj $ \x ->
   where args x = ERef nopos $ ERef nopos $ eArgumentsObj es (EId nopos x)
 
 
--- |Algorithm 11.9.6 of ECMA-262, 3rd edition.  OStrictEq accounts for floating
--- point numbers.  Everything else is syntactic equality.
-strictEquality :: ExprPos -> ExprPos -> ExprPos
-strictEquality =  eStxEq
-
+strictEquality e1 e2 = EOp nopos OStrictEq [e1, e2] -- Algorithm 11.9.6 
 toObject e = EApp nopos (EId nopos "@toObject") [e]
-
 toPrimitive_String e = EApp nopos (EId nopos "@toPrimitive_String") [e]
 toPrimitive_Number e = EApp nopos (EId nopos "@toPrimitive_Number") [e]
 toPrimitive = toPrimitive_Number
@@ -187,8 +178,8 @@ isArrayIndex e =
   ELet nopos [("$isai", e)] $
     eAnd (isString (EId nopos "$isai"))
          (ELet nopos [("$intai", EOp nopos OToUInt32 [primToNum $ EId nopos "$isai"])] $
-           (eAnd (eNot (eStxEq (EId nopos "$intai") (ENumber nopos 0xFFFFFFFF)))
-                 (eStxEq (primToStr (EId nopos "$intai")) (EId nopos "$isai"))))
+           (eAnd (eNot (strictEquality (EId nopos "$intai") (ENumber nopos 0xFFFFFFFF)))
+                 (strictEquality (primToStr (EId nopos "$intai")) (EId nopos "$isai"))))
 
 
 --helper since it's used in stmt too:
@@ -243,7 +234,7 @@ eFor init incr test body = ESeq (label init) init loop
 -- 8.6.2.2 (Object put) and 15.4.5.1 (Array put).
 theSetter :: Ident -> Ident -> (ExprPos -> ExprPos)
 theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId -> 
-  ESeq nopos (EIf nopos (eStxEq (EGetField nopos (EDeref nopos (EId nopos objRef)) (EString nopos "$class"))
+  ESeq nopos (EIf nopos (strictEquality (EGetField nopos (EDeref nopos (EId nopos objRef)) (EString nopos "$class"))
                     (EString nopos "Array"))
          (setArray objRef fieldRef (EId nopos vId))
          (setObj objRef fieldRef (EId nopos vId)))
@@ -253,7 +244,7 @@ theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId ->
                   (EUpdateField nopos (EDeref nopos (EId nopos objRef)) (EId nopos field) v)
         setArray objRef field v = 
           --15.4.5.1:
-          EIf nopos (eStxEq (EId nopos field) (EString nopos "length"))
+          EIf nopos (strictEquality (EId nopos field) (EString nopos "length"))
               (EThrow nopos (EString nopos "setting .length of array NYI")) $
               ELet1 nopos (setObj objRef field v) $ \r ->
                  --steps 7-11
@@ -545,7 +536,7 @@ stmt env s = case s of
             ("$finIter", ERef nopos $ EUndefined nopos)] $ --internal iterator
       --ECMA-breaking change: iterating thru undefined doesn't throw typeerr
       EIf nopos (eOr (isUndefined (EId nopos "$_finObj"))
-                 (eStxEq (EId nopos "$_finObj") (ENull nopos)))
+                 (strictEquality (EId nopos "$_finObj") (ENull nopos)))
           (EUndefined nopos) $
           restfin a p x body
   restfin a p x body =    

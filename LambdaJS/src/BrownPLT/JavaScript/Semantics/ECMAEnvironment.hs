@@ -61,7 +61,7 @@ infixOp' op e1 e2 = case op of
               --while the curLHS isn't null:
               EWhile nopos (eNot $ isNull (EDeref nopos $ EId nopos curLHS)) $
                 --if it matches the rhs.prototype, we're done
-                EIf nopos (eStxEq (EDeref nopos $ EId nopos curLHS) (EId nopos fProt))
+                EIf nopos (strictEquality (EDeref nopos $ EId nopos curLHS) (EId nopos fProt))
                  (ESeq nopos (ESetRef nopos (EId nopos res) (EBool nopos True))
                        (EBreak nopos "$break" (EUndefined nopos)))
                  --otherwise go up once the prototype chain
@@ -268,12 +268,12 @@ globalValuesAndFunctions =
   , ("parseFloat", functionObject ["n"] $ 
     EOp nopos OPrimToNum [toString $ EId nopos "n"])
   , ("isNaN", functionObject ["n"] $ 
-       eStxEq (ENumber nopos (0.0/0.0)) (toNumber (EId nopos "n")))
+       strictEquality (ENumber nopos (0.0/0.0)) (toNumber (EId nopos "n")))
   , ("isFinite", functionObject ["x"] $
      ELet nopos [("n", toNumber (EId nopos "x"))] $
-       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (0.0/0.0))) (EBool nopos False) $
-       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (1.0/0.0))) (EBool nopos False) $
-       EIf nopos (eStxEq (EId nopos "n") (ENumber nopos (-1.0/0.0))) (EBool nopos False) $
+       EIf nopos (strictEquality (EId nopos "n") (ENumber nopos (0.0/0.0))) (EBool nopos False) $
+       EIf nopos (strictEquality (EId nopos "n") (ENumber nopos (1.0/0.0))) (EBool nopos False) $
+       EIf nopos (strictEquality (EId nopos "n") (ENumber nopos (-1.0/0.0))) (EBool nopos False) $
        (EBool nopos True))
   -- TODO: URI functions don't transform URLs correctly.  But, the type
   -- conversion is in place.
@@ -340,7 +340,7 @@ updateObject objE ((name,e):xs) rest =
            (updateObject objE xs rest)
 
 --helper to ensure the corrakt type of 'this'
-checkThis expected = EIf nopos (eNot (eStxEq (getFieldT (EString nopos "$class")) 
+checkThis expected = EIf nopos (eNot (strictEquality (getFieldT (EString nopos "$class")) 
                                        (EString nopos expected)))
                 (EThrow nopos $ newError "TypeError" $ 
                   "expected " ++ expected ++ " obj, got smth else")
@@ -459,7 +459,7 @@ arrayPrototype = object
   , ("concat", (EString nopos "TODO: Array.prototype.concat"))
   , ("join", desugarExprSetenv arrayJoin (M.singleton "this" True))
   , ("pop", functionObject [] $
-    (EIf nopos (eStxEq (getFieldT (EString nopos "length")) (ENumber nopos 0))
+    (EIf nopos (strictEquality (getFieldT (EString nopos "length")) (ENumber nopos 0))
          (EUndefined nopos) $
          --set length to length-1, get the item there, delete it, and return
          ELet nopos [("$newlen", (EOp nopos ONumPlus 
@@ -558,9 +558,9 @@ jsArray = ERef nopos $ object
              (EId nopos "arguments")
   asConstr = 
       --if there is 1 arg and it is a number, we do something else:
-      EIf nopos (eAnd (eStxEq (EId nopos "$numArgs") (ENumber nopos 1))
+      EIf nopos (eAnd (strictEquality (EId nopos "$numArgs") (ENumber nopos 1))
                 (isNumber (EId nopos "$arg0")))
-          (EIf nopos (eStxEq (EOp nopos OToUInt32 [(EId nopos "$arg0")])
+          (EIf nopos (strictEquality (EOp nopos OToUInt32 [(EId nopos "$arg0")])
                        (EId nopos "$arg0"))
                (objsetup (EId nopos "$arg0") (EUndefined nopos))
                (EThrow nopos $ newError "RangeError" "invalid len to new Array()"))
@@ -637,7 +637,7 @@ jsFunction = ERef nopos $ object
   [ ("$code", lambda [] $
     ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
                                  (EString nopos "length"))] $
-      EIf nopos (eStxEq (EId nopos "$numArgs") (ENumber nopos 0))
+      EIf nopos (strictEquality (EId nopos "$numArgs") (ENumber nopos 0))
           (setFieldTS (EString nopos "$proto") (EId nopos "@Function_prototype") $
            setFieldTS (EString nopos "$class") (EString nopos "Function") $
            setFieldTS (EString nopos "length") (ENumber nopos 0) $
@@ -730,7 +730,7 @@ jsNumber = ERef nopos $ object
   constr = lambda ["$value"] $ 
     ELet nopos [("$numArgs", EGetField nopos (EDeref nopos $ EDeref nopos $ EId nopos "arguments")
                                  (EString nopos "length"))] $
-      ESeq nopos (EIf nopos (eStxEq (EId nopos "$numArgs") (ENumber nopos 0))
+      ESeq nopos (EIf nopos (strictEquality (EId nopos "$numArgs") (ENumber nopos 0))
                 (objsetup (ENumber nopos 0.0))
                 (objsetup (toNumber $ EId nopos "$value")))
            (EUndefined nopos)
@@ -767,7 +767,7 @@ functionPrototypeValues =
   checkArray ae = 
     EIf nopos (eNot (eAnd (isLocation ae) 
                     (eOr (hasClass ae "Array")
-                         (eStxEq (getField ae (EString nopos "$isArgs"))
+                         (strictEquality (getField ae (EString nopos "$isArgs"))
                                  (EBool nopos True)))))
         (EThrow nopos $ newError "TypeError" "apply expects arguments or array")
   arrayToArgs ae = 
@@ -787,7 +787,7 @@ functionPrototypeValues =
       (EId nopos argsObj)
 
 
-hasClass eObj cls = eStxEq (getField eObj (EString nopos "$class")) (EString nopos cls)
+hasClass eObj cls = strictEquality (getField eObj (EString nopos "$class")) (EString nopos cls)
 
 
 -- |Section 15.6.4
@@ -869,8 +869,8 @@ numberPrototype = object
   , ("$value", ENumber nopos 0)
   , ("constructor", EUndefined nopos) -- Set to Number later
   , ("toString", functionObject ["radix"] $ 
-      EIf nopos (eNot (eOr (eStxEq (EId nopos "radix") (EUndefined nopos))
-                     (eStxEq (EId nopos "radix") (ENumber nopos 10))))
+      EIf nopos (eNot (eOr (strictEquality (EId nopos "radix") (EUndefined nopos))
+                     (strictEquality (EId nopos "radix") (ENumber nopos 10))))
           (EThrow nopos $ EString nopos "num toStr for non-10 radix NYI")
           (primToStr (getFieldT (EString nopos "$value"))))
   , ("toLocaleString", functionObject [] $ 
@@ -1066,7 +1066,7 @@ ecma262Env body =
     let x = EId nopos "x" in
       EIf nopos (typeIs x "undefined")
           (EThrow nopos $ newError "TypeError" "toObject received undefined") $ 
-      EIf nopos (eStxEq x (ENull nopos))
+      EIf nopos (strictEquality x (ENull nopos))
           (EThrow nopos $ newError "TypeError" "toObject received null") $
       EIf nopos (typeIs x "boolean") 
           (ERef nopos $ EObject nopos
