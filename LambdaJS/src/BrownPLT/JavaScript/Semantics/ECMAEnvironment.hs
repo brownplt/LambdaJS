@@ -8,6 +8,41 @@ import Text.ParserCombinators.Parsec
 import BrownPLT.JavaScript.Parser (parseExpression)
 import qualified Data.Map as M
 
+-- |According to the specification, toPrimitive may signal a TypeError.
+-- this is generalized to do either toString first, or valueOf first,
+-- based on the 'hint'
+-- Even though GetValue'd values are given to ToPrimitive in ECMA,
+-- here we need ERefs because we will apply functions.
+-- So make sure you give this ERef (EObject) if you get an object.
+toPrimitive' :: String -> String -> ExprPos
+toPrimitive' first second = 
+  --if it's an object ref, then convert it with methods
+  --otherwise it is already primitive, so just return it.
+  ELambda nopos ["$x"] $ 
+    EIf nopos (isLocation (EId nopos "$x"))
+        cvt
+        (EId nopos "$x")
+  -- [[DefaultValue]] (8.6.2.6)
+  where 
+    --if valueOf is a function, try it. else try tostr.
+    cvt = ELet nopos [("$vOf", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos first)))] $    
+            EIf nopos (isRefComb isFunctionObj (EId nopos "$vOf"))
+              (ELet nopos [("$vRes", applyObj (EId nopos "$vOf") (EId nopos "$x") [])] $
+                EIf nopos (isPrim (EId nopos "$vRes"))
+                    (EId nopos "$vRes")
+                    str)
+              str
+    --if toString is a function, try it. else throw excp
+    str = ELet nopos [("$toStr", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos second)))] $
+            EIf nopos (isRefComb isFunctionObj (EId nopos "$toStr"))
+              (ELet nopos [("$tRes", applyObj (EId nopos "$toStr") (EId nopos "$x") [])] $
+                EIf nopos (isPrim (EId nopos "$tRes"))
+                    (EId nopos "$tRes")
+                    exc)
+              exc
+    exc = (EThrow nopos $ newError "TypeError" "cannot convert obj to primitive")
+
+
 
 object :: [(Ident, ExprPos)] -> ExprPos
 object props = EObject nopos $ map (\(x, e) -> (x, e)) props
@@ -781,6 +816,12 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
   
 ecma262Env :: ExprPos -> ExprPos
 ecma262Env body =
+  ELet nopos [("$makeException", 
+              ELambda nopos ["name", "msg"] $ eNew 
+                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
+                [EId nopos "msg"])] $
+  ELet nopos [("@toPrimitive_String", toPrimitive' "toString" "valueOf")] $
+  ELet nopos [("@toPrimitive_Number", toPrimitive' "valueOf" "toString")] $
   updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
   updateObject (EId nopos "@Function_prototype") functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
@@ -843,10 +884,6 @@ ecma262Env body =
             , ("$value", x)
             , ("length", EOp nopos OStrLen [x])]) $
       x)] $
-  ELet nopos [("$makeException", 
-              ELambda nopos ["name", "msg"] $ eNew 
-                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
-                [EId nopos "msg"])] $
 
   ESeq nopos setConstructors $
   updateObject (EId nopos "$global") globalValuesAndFunctions $

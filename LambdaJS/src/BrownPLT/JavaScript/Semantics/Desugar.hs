@@ -4,7 +4,8 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , desugarStmt
   , desugarStmtsWithResult
   , toString, toNumber, toObject, toBoolean
-  , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation
+  , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation, isPrim
+  , isFunctionObj
   , primToStr, primToNum
   , applyObj
   , eAnd, eNot, eOr, eStxEq, eNew, eNewDirect, eFor, eArgumentsObj
@@ -117,43 +118,10 @@ strictEquality =  eStxEq
 
 toObject e = EApp nopos (EId nopos "@toObject") [e]
 
--- |According to the specification, toPrimitive may signal a TypeError.
--- this is generalized to do either toString first, or valueOf first,
--- based on the 'hint'
--- Even though GetValue'd values are given to ToPrimitive in ECMA,
--- here we need ERefs because we will apply functions.
--- So make sure you give this ERef (EObject) if you get an object.
-toPrimitive_ :: String -> String -> ExprPos -> ExprPos
-toPrimitive_ first second e = 
-  --if it's an object ref, then convert it with methods
-  --otherwise it is already primitive, so just return it.
-  ELet nopos [("$x", e)] $ 
-    EIf nopos (isLocation (EId nopos "$x"))
-        cvt
-        (EId nopos "$x")
-  -- [[DefaultValue]] (8.6.2.6)
-  where 
-    --if valueOf is a function, try it. else try tostr.
-    cvt = ELet nopos [("$vOf", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos first)))] $    
-            EIf nopos (isRefComb isFunctionObj (EId nopos "$vOf"))
-              (ELet nopos [("$vRes", applyObj (EId nopos "$vOf") (EId nopos "$x") [])] $
-                EIf nopos (isPrim (EId nopos "$vRes"))
-                    (EId nopos "$vRes")
-                    str)
-              str
-    --if toString is a function, try it. else throw excp
-    str = ELet nopos [("$toStr", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos second)))] $
-            EIf nopos (isRefComb isFunctionObj (EId nopos "$toStr"))
-              (ELet nopos [("$tRes", applyObj (EId nopos "$toStr") (EId nopos "$x") [])] $
-                EIf nopos (isPrim (EId nopos "$tRes"))
-                    (EId nopos "$tRes")
-                    exc)
-              exc
-    exc = (EThrow nopos $ newError "TypeError" "cannot convert obj to primitive")
-
-
-toPrimitive_String = toPrimitive_ "toString" "valueOf"
-toPrimitive_Number = toPrimitive_ "valueOf" "toString"
+toPrimitive_String e = 
+  EApp nopos (EId nopos "@toPrimitive_String") [e]
+toPrimitive_Number e = 
+  EApp nopos (EId nopos "@toPrimitive_Number") [e]
 toPrimitive = toPrimitive_Number
 
 
