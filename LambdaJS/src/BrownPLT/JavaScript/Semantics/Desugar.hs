@@ -6,7 +6,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , toString, toNumber, toObject, toBoolean
   , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation, isPrim
   , isFunctionObj
-  , primToStr, primToNum, toPrimitive, strictEquality, abstractEquality
+  , primToStr, primToNum, toPrimitive, strictEquality
   , toPrimitive_Number
   , applyObj
   , eAnd, eNot, eOr, eNew, eNewDirect, eFor, eArgumentsObj
@@ -116,7 +116,6 @@ toPrimitive = toPrimitive_Number
 toNumber e = EApp nopos (EId nopos "@toNumber") [e]
 toBoolean = primToBool
 
-
 -- |Algorithm 9.8
 -- expects objects to be locations to be able to call toPrimitive.
 -- otherwise it should be a value.
@@ -127,48 +126,8 @@ toString e =
         (primToStr $ toPrimitive (EId nopos "$toStr"))
         (primToStr (EId nopos "$toStr"))
 
-
-abstractEquality :: ExprPos -> ExprPos -> ExprPos
-abstractEquality e1 e2 = ELet nopos [("$lhs", e1), ("$rhs", e2)] $
-  EIf nopos (EOp nopos OAbstractEq [EId nopos "$lhs", EId nopos "$rhs"]) 
-      (EBool nopos True) $
-  EIf nopos (isLocation (EId nopos "$lhs"))
-      (EOp nopos OAbstractEq [toPrimitive (EId nopos "$lhs"), EId nopos "$rhs"]) $
-  EIf nopos (isLocation (EId nopos "$rhs"))
-      (EOp nopos OAbstractEq [EId nopos "$lhs", toPrimitive (EId nopos "$rhs")])
-      (EBool nopos False)
-
-
-
-      
-infixOp :: InfixOp -> ExprPos -> ExprPos -> ExprPos
 infixOp op e1 e2 = EApp nopos (EId nopos ("@" ++ show op)) [e1, e2]
-
-prefixOp :: PrefixOp -> ExprPos -> ExprPos
-prefixOp op e = case op of 
-  -- It is strange that that the subterm of delete is an expression and not
-  -- an l-value.  Note that that delete has no effect when its subexpression
-  -- is not l-value like.
-  PrefixDelete -> case e of
-    EGetField a1 (EDeref a2 eObj) eString ->
-      ELet nopos [("$delObj", eObj),
-            ("$delStr", eString)] $
-        EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", EId nopos "$delStr"])
-            (ESeq nopos
-              (ESetRef nopos (EId nopos "$delObj")
-                (EDeleteField a1 (EDeref a2 $ EId nopos "$delObj") (EId nopos "$delStr")))
-              (EBool nopos True))
-            (EBool nopos False)
-    otherwise -> EBool nopos True
-    
-  PrefixVoid -> ESeq nopos (getValue e) (EUndefined nopos)
-  --TODO: make sure step 3 in 11.4.3 makes sense for our typeof:
-  PrefixTypeof -> EOp nopos OSurfaceTypeof [getValue e]
-  PrefixBNot -> EOp nopos OBNot [EOp nopos OToInt32 [toNumber e]]
-  PrefixLNot -> eNot (toBoolean e)
-  PrefixPlus -> toNumber e
-  PrefixMinus -> EOp nopos OSub [ENumber nopos 0.0, toNumber e]
-
+prefixOp op e = EApp nopos (EId nopos ("@" ++ show op)) [e]
 
 type Env = M.Map Ident Bool
 

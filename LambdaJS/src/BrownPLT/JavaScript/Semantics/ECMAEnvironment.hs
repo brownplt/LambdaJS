@@ -5,7 +5,7 @@ module BrownPLT.JavaScript.Semantics.ECMAEnvironment
 import BrownPLT.JavaScript.Semantics.Desugar
 import BrownPLT.JavaScript.Semantics.Syntax
 import Text.ParserCombinators.Parsec
-import BrownPLT.JavaScript.Syntax (InfixOp (..))
+import BrownPLT.JavaScript.Syntax (InfixOp (..), PrefixOp (..))
 import BrownPLT.JavaScript.Parser (parseExpression)
 import qualified Data.Map as M
 
@@ -146,11 +146,50 @@ infixOp' op e1 e2 = case op of
         ELet nopos [("$bitLhs", EOp nopos OToInt32 [toNumber (EId nopos "$opLhs")]),
               ("$bitRhs", EOp nopos OToInt32 [toNumber (EId nopos "$opRhs")])] $
           EOp nopos eop [EId nopos "$bitLhs", EId nopos "$bitRhs"]
-
+    abstractEquality e1 e2 = ELet nopos [("$lhs", e1), ("$rhs", e2)] $
+      EIf nopos (EOp nopos OAbstractEq [EId nopos "$lhs", EId nopos "$rhs"]) 
+          (EBool nopos True) $
+      EIf nopos (isLocation (EId nopos "$lhs"))
+          (EOp nopos OAbstractEq [toPrimitive (EId nopos "$lhs"),
+                                  EId nopos "$rhs"]) $
+      EIf nopos (isLocation (EId nopos "$rhs"))
+          (EOp nopos OAbstractEq [EId nopos "$lhs", 
+                                  toPrimitive (EId nopos "$rhs")])
+          (EBool nopos False)
+    
 makeInfixOp op = 
   ("@" ++ show op,
    ELambda nopos ["@x", "@y"] (infixOp' op (EId nopos "@x") (EId nopos "@y")))
-                      
+
+prefixOp' :: PrefixOp -> ExprPos -> ExprPos
+prefixOp' op e = case op of 
+  -- It is strange that that the subterm of delete is an expression and not
+  -- an l-value.  Note that that delete has no effect when its subexpression
+  -- is not l-value like.
+  PrefixDelete -> case e of
+    EGetField a1 (EDeref a2 eObj) eString ->
+      ELet nopos [("$delObj", eObj),
+            ("$delStr", eString)] $
+        EIf nopos (EOp nopos OObjCanDelete [EDeref nopos $ EId nopos "$delObj", EId nopos "$delStr"])
+            (ESeq nopos
+              (ESetRef nopos (EId nopos "$delObj")
+                (EDeleteField a1 (EDeref a2 $ EId nopos "$delObj") (EId nopos "$delStr")))
+              (EBool nopos True))
+            (EBool nopos False)
+    otherwise -> EBool nopos True
+    
+  PrefixVoid -> ESeq nopos (getValue e) (EUndefined nopos)
+  --TODO: make sure step 3 in 11.4.3 makes sense for our typeof:
+  PrefixTypeof -> EOp nopos OSurfaceTypeof [getValue e]
+  PrefixBNot -> EOp nopos OBNot [EOp nopos OToInt32 [toNumber e]]
+  PrefixLNot -> eNot (toBoolean e)
+  PrefixPlus -> toNumber e
+  PrefixMinus -> EOp nopos OSub [ENumber nopos 0.0, toNumber e]
+         
+makePrefixOp op =
+  ("@" ++ show op,
+   ELambda nopos ["@x"] (prefixOp' op (EId nopos "@x")))
+             
 
 -- |According to the specification, toPrimitive may signal a TypeError.
 -- this is generalized to do either toString first, or valueOf first,
@@ -1024,6 +1063,13 @@ ecma262Env body =
   ELet nopos [makeInfixOp OpBXor] $
   ELet nopos [makeInfixOp OpBOr] $
   ELet nopos [makeInfixOp OpAdd] $
+  ELet nopos [makePrefixOp PrefixLNot] $
+  ELet nopos [makePrefixOp PrefixBNot] $
+  ELet nopos [makePrefixOp PrefixPlus] $
+  ELet nopos [makePrefixOp PrefixMinus] $
+  ELet nopos [makePrefixOp PrefixTypeof] $
+  ELet nopos [makePrefixOp PrefixVoid] $
+  ELet nopos [makePrefixOp PrefixDelete] $
   updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
   updateObject (EId nopos "@Function_prototype") functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
