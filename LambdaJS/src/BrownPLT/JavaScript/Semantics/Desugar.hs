@@ -365,10 +365,7 @@ eNewDirect :: ExprPos -> ExprPos -> ExprPos
 eNewDirect eConstr argumentObj = 
   ELet nopos [("$constr", eConstr)] $
     EIf nopos (eNot $ isRefComb isFunctionObj (EId nopos "$constr"))
-        (EThrow nopos $ newError "TypeError" "new not given function") $
-        newWork eConstr argumentObj 
-  where --newWork split up here so that we don't have infinite recursion
-    newWork eConstr argumentObj = 
+        (EThrow nopos $ newError "TypeError" "new not given function")
         --[[Construct]], 13.2.2 . it's always the same,
         --so no need to have it be a $constr field (like $call)
          (ELet nopos [("$protoField", 
