@@ -9,6 +9,35 @@ import BrownPLT.JavaScript.Syntax (InfixOp (..), PrefixOp (..))
 import BrownPLT.JavaScript.Parser (parseExpression)
 import qualified Data.Map as M
 
+--15.4.5.1:
+setArray = ELambda nopos ["@o", "@f", "@v"] $
+  let objRef = "@o"
+      field = "@f"
+      v = EId nopos "@v"
+      setObj = ESetRef nopos (EId nopos objRef) 
+                 (EUpdateField nopos (EDeref nopos (EId nopos objRef)) 
+                                     (EId nopos field) v) in
+    EIf nopos (strictEquality (EId nopos field) (EString nopos "length"))
+        (EThrow nopos (EString nopos "setting .length of array NYI")) $
+        ELet1 nopos setObj $ \r ->
+           --steps 7-11
+         EIf nopos (isArrayIndex (EId nopos field))
+            (ELet nopos [("$aindx", primToNum $ EId nopos field),
+                   ("$curln", EGetField nopos (EDeref nopos (EId nopos objRef))
+                                        (EString nopos "length"))] $
+              EIf nopos (EOp nopos OLt [EId nopos "$aindx", EId nopos "$curln"])
+                 (EId nopos r)
+                 (ESeq nopos
+                    (ESetRef nopos 
+                      (EId nopos objRef)
+                      (EUpdateField nopos (EDeref nopos (EId nopos objRef))
+                                    (EString nopos "length")
+                                    (EOp nopos ONumPlus [EId nopos "$aindx",
+                                                   ENumber nopos 1])))
+                    (EId nopos r)))
+            (EId nopos r)
+  
+
 --(in order of appearance in the spec)
 infixOp' :: InfixOp -> ExprPos -> ExprPos -> ExprPos
 infixOp' op e1 e2 = case op of
@@ -1070,6 +1099,7 @@ ecma262Env body =
   ELet nopos [makePrefixOp PrefixTypeof] $
   ELet nopos [makePrefixOp PrefixVoid] $
   ELet nopos [makePrefixOp PrefixDelete] $
+  ELet nopos [("@setArray", setArray)] $
   updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
   updateObject (EId nopos "@Function_prototype") functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $

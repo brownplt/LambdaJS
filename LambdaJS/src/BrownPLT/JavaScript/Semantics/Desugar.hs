@@ -11,7 +11,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , applyObj
   , eAnd, eNot, eOr, eNew, eNewDirect, eFor, eArgumentsObj
   , getValue, newError, getGlobalVar
-  , typeIs
+  , typeIs, isArrayIndex
   ) where
 
 import qualified Data.Map as M
@@ -127,6 +127,7 @@ toString e =
         (primToStr (EId nopos "$toStr"))
 
 infixOp op e1 e2 = EApp nopos (EId nopos ("@" ++ show op)) [e1, e2]
+
 prefixOp op e = EApp nopos (EId nopos ("@" ++ show op)) [e]
 
 type Env = M.Map Ident Bool
@@ -195,33 +196,13 @@ theSetter :: Ident -> Ident -> (ExprPos -> ExprPos)
 theSetter objRef fieldRef = \v -> ELet1 nopos v $ \vId -> 
   ESeq nopos (EIf nopos (strictEquality (EGetField nopos (EDeref nopos (EId nopos objRef)) (EString nopos "$class"))
                     (EString nopos "Array"))
-         (setArray objRef fieldRef (EId nopos vId))
+         (EApp nopos (EId nopos "@setArray")
+               (map (EId nopos) [objRef, fieldRef, vId]))
          (setObj objRef fieldRef (EId nopos vId)))
        (EId nopos vId)
   where setObj objRef field v = 
           ESetRef nopos (EId nopos objRef) 
                   (EUpdateField nopos (EDeref nopos (EId nopos objRef)) (EId nopos field) v)
-        setArray objRef field v = 
-          --15.4.5.1:
-          EIf nopos (strictEquality (EId nopos field) (EString nopos "length"))
-              (EThrow nopos (EString nopos "setting .length of array NYI")) $
-              ELet1 nopos (setObj objRef field v) $ \r ->
-                 --steps 7-11
-               EIf nopos (isArrayIndex (EId nopos field))
-                  (ELet nopos [("$aindx", primToNum $ EId nopos field),
-                         ("$curln", EGetField nopos (EDeref nopos (EId nopos objRef))
-                                              (EString nopos "length"))] $
-                    EIf nopos (EOp nopos OLt [EId nopos "$aindx", EId nopos "$curln"])
-                       (EId nopos r)
-                       (ESeq nopos
-                          (ESetRef nopos 
-                            (EId nopos objRef)
-                            (EUpdateField nopos (EDeref nopos (EId nopos objRef))
-                                          (EString nopos "length")
-                                          (EOp nopos ONumPlus [EId nopos "$aindx",
-                                                         ENumber nopos 1])))
-                          (EId nopos r)))
-                  (EId nopos r)
 
 withLValue :: Env 
            -> LValue SourcePos  
