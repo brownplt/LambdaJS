@@ -9,6 +9,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , applyObj
   , eAnd, eNot, eOr, eStxEq, eNew, eNewDirect, eFor, eArgumentsObj
   , getValue, newError, getGlobalVar
+  , typeIs
   ) where
 
 import qualified Data.Map as M
@@ -114,31 +115,7 @@ applyObj efuncobj ethis es = ELet1 nopos efuncobj $ \x ->
 strictEquality :: ExprPos -> ExprPos -> ExprPos
 strictEquality =  eStxEq
 
---if given an object, expects it to be a (ERef (EObject))
---it itself returns Refs
-toObject e = 
-  ELet1 nopos e $ \x -> 
-    EIf nopos (typeIs (EId nopos x) "undefined")
-        (EThrow nopos $ newError "TypeError" "toObject received undefined") $  
-    EIf nopos (eStxEq (EId nopos x) (ENull nopos))
-        (EThrow nopos $ newError "TypeError" "toObject received null") $
-    EIf nopos (typeIs (EId nopos x) "boolean") 
-        (ERef nopos $ EObject nopos
-          [ ("$proto", EId nopos "$Boolean.prototype")
-          , ("$class", EString nopos "Boolean")
-          , ("$value", EId nopos x)]) $ 
-    EIf nopos (typeIs (EId nopos x) "number")
-        (ERef nopos $ EObject nopos
-          [ ("$proto", EId nopos "$Number.prototype")
-          , ("$class", EString nopos "Number")
-          , ("$value", EId nopos x)]) $ 
-    EIf nopos (typeIs (EId nopos x) "string")
-        (ERef nopos $ EObject nopos
-          [ ("$proto", EId nopos "$String.prototype")
-          , ("$class", EString nopos "String")
-          , ("$value", EId nopos x)
-          , ("length", EOp nopos OStrLen [EId nopos x])]) $
-    (EId nopos x)
+toObject e = EApp nopos (EId nopos "@toObject") [e]
 
 -- |According to the specification, toPrimitive may signal a TypeError.
 -- this is generalized to do either toString first, or valueOf first,

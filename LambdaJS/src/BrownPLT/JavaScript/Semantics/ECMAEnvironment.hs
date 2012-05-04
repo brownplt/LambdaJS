@@ -780,13 +780,7 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
                               (EDeref nopos $ EId nopos name))
   
 ecma262Env :: ExprPos -> ExprPos
-ecma262Env body = 
-  --we immediately need function.prototype, since everything uses it
-  ELet nopos [("$makeException", 
-              ELambda nopos ["name", "msg"] $ eNew 
-                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
-                [EId nopos "msg"])] $          
-
+ecma262Env body =
   updateObject (EId nopos "@Object_prototype") objectPrototypeValues $
   updateObject (EId nopos "@Function_prototype") functionPrototypeValues $
   ELet nopos [("$Date.prototype", ERef nopos datePrototype)] $
@@ -824,6 +818,35 @@ ecma262Env body =
   ELet nopos [("SyntaxError", ERef nopos (jsError "$SyntaxError.prototype"))] $ 
   ELet nopos [("TypeError", ERef nopos (jsError "$TypeError.prototype"))] $ 
   ELet nopos [("URIError", ERef nopos (jsError "$URIError.prototype"))] $ 
+  --if given an object, expects it to be a (ERef (EObject))
+  --it itself returns Refs
+  ELet nopos [("@toObject", ELambda nopos ["x"] $
+    let x = EId nopos "x" in
+      EIf nopos (typeIs x "undefined")
+          (EThrow nopos $ newError "TypeError" "toObject received undefined") $ 
+      EIf nopos (eStxEq x (ENull nopos))
+          (EThrow nopos $ newError "TypeError" "toObject received null") $
+      EIf nopos (typeIs x "boolean") 
+          (ERef nopos $ EObject nopos
+            [ ("$proto", EId nopos "$Boolean.prototype")
+            , ("$class", EString nopos "Boolean")
+            , ("$value", x)]) $ 
+      EIf nopos (typeIs x "number")
+          (ERef nopos $ EObject nopos
+            [ ("$proto", EId nopos "$Number.prototype")
+            , ("$class", EString nopos "Number")
+            , ("$value", x)]) $ 
+      EIf nopos (typeIs x "string")
+          (ERef nopos $ EObject nopos
+            [ ("$proto", EId nopos "$String.prototype")
+            , ("$class", EString nopos "String")
+            , ("$value", x)
+            , ("length", EOp nopos OStrLen [x])]) $
+      x)] $
+  ELet nopos [("$makeException", 
+              ELambda nopos ["name", "msg"] $ eNew 
+                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
+                [EId nopos "msg"])] $
 
   ESeq nopos setConstructors $
   updateObject (EId nopos "$global") globalValuesAndFunctions $
