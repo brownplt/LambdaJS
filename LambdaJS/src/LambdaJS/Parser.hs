@@ -7,6 +7,7 @@ import LambdaJS.Lexer
 import Text.Parsec hiding (label, string)
 import Text.Parsec.Expr
 import BrownPLT.JavaScript.Semantics.Syntax hiding (label)
+import BrownPLT.JavaScript.Semantics.PrettyPrint (opReps)
 import Control.Monad
 import Debug.Trace
 
@@ -185,10 +186,26 @@ atom = string <|> id <|> deref <|> parens expr <|> number <|> bool <|>
 term = buildExpressionParser exprTable atom
 
 expr' = right term [ app, getUpdateField ]
+  
+
+operator =
+  let tbl = map (\(op,str) -> do { reserved str; return op }) opReps 
+    in choice tbl
+
+op = do
+  p <- getPosition
+  reserved "op"
+  reservedOp "("
+  name <- operator
+  reservedOp ","
+  args <- expr `sepBy` comma
+  reservedOp ")"
+  return (EOp p name args)
 
 expr = chainr1 exp seq
   where exp = if_ <|> while <|> deleteField <|>  tryCatchFinally <|> 
-                label <|> break <|> lambda <|> let_ <|> throw <|> expr'
+                label <|> break <|> lambda <|> let_ <|> throw <|> expr' <|>
+                op
         seq = do
           p <- getPosition
           semi

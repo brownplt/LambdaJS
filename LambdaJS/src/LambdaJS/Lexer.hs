@@ -30,7 +30,8 @@ def = T.LanguageDef {
   opLetter = oneOf "=<>|&+",
   reservedNames = [ "true", "false", "fun", "let", "in", "and", "ref",
                     "delete", "if", "then", "else", "while", "do", "label",
-                    "break", "throw", "try", "catch", "finally", "typeof" ],
+                    "break", "throw", "try", "catch", "finally", "typeof", 
+                    "op" ],
   reservedOpNames = [ ".", ",", "{", "}", "(", ")", "=", ":=", "!", "[", "]",
                       ";" ],
   caseSensitive = False

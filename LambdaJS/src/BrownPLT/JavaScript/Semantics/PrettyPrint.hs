@@ -2,6 +2,7 @@ module BrownPLT.JavaScript.Semantics.PrettyPrint
   ( pretty
   , op
   , renderExpr
+  , opReps
   ) where
 
 
@@ -9,55 +10,58 @@ import BrownPLT.JavaScript.Semantics.Syntax
 import Text.PrettyPrint.HughesPJ
 import Control.Monad.State
 
+opReps :: [(Op, String)]
+opReps =
+  [ (ONumPlus, "+"),
+    (OStrPlus, "string-+"),
+    (OMul, "*"),
+    (ODiv, "/"),
+    (OMod, "%"),
+    (OSub, "-"),
+    (OLt , "<"),
+    (OStrLt, "string-<"),
+    (OStrictEq, "==="),
+    (OAbstractEq, "=="),
+    (OTypeof, "typeof"),
+    (OSurfaceTypeof, "surface-typeof"),
+    (OPrimToNum, "prim->number"),
+    (OPrimToStr, "prim->string"),
+    (OPrimToBool, "prim->bool"),
+    (OIsPrim, "prim?"),
+    (OToInteger, "to-integer"),
+    (OToInt32, "to-int-32"),
+    (OToUInt32, "to-uint-32"),
+    (OBAnd, "&"),
+    (OBOr, "\\|"),
+    (OBXOr, "^"),
+    (OBNot, "~"),
+    (OLShift, "<<"),
+    (OSpRShift, ">>"),
+    (OZfRShift, ">>>"),
+    (OHasOwnProp, "has-own-prop?"),
+    (OPrint, "print-string"),
+    (OStrContains, "str-contains"),
+    (OObjIterHasNext, "obj-iterate-has-next?"),
+    (OObjIterNext, "obj-iterate-next"),
+    (OObjIterKey, "obj-iterate-key"),
+    (OStrStartsWith, "str-startswith"),
+    (OStrLen, "str-length"),
+    (OStrSplitRegExp, "str-split-regexp"),
+    (OStrSplitStrExp, "str-split-strexp"),
+    (OObjCanDelete, "obj-can-delete?"),
+    (OMathExp, "math-exp"),
+    (OMathLog, "math-log"),
+    (OMathCos, "math-cos"),
+    (OMathSin, "math-sin"),
+    (OMathAbs, "math-abs"),
+    (OMathPow, "math-pow"),
+    (ORegExpQuote, "regexp-quote"),
+    (ORegExpMatch, "regexp-match") ]
 
 op :: Op -> Doc
-op o = text $ case o of
-  ONumPlus -> "+"
-  OStrPlus -> "string-+"
-  OMul -> "*"
-  ODiv -> "/"
-  OMod -> "%"
-  OSub -> "-"
-  OLt  -> "<"
-  OStrLt -> "string-<"
-  OStrictEq -> "==="
-  OAbstractEq -> "=="
-  OTypeof -> "typeof"
-  OSurfaceTypeof -> "surface-typeof"
-  OPrimToNum -> "prim->number"
-  OPrimToStr -> "prim->string"
-  OPrimToBool -> "prim->bool"
-  OIsPrim -> "prim?"
-  OToInteger -> "to-integer"
-  OToInt32 -> "to-int-32"
-  OToUInt32 -> "to-uint-32"
-  OBAnd -> "&"
-  OBOr -> "\\|"
-  OBXOr -> "^"
-  OBNot -> "~"
-  OLShift -> "<<"
-  OSpRShift -> ">>"
-  OZfRShift -> ">>>"
-  OHasOwnProp -> "has-own-prop?"
-  OPrint -> "print-string"
-  OStrContains -> "str-contains"
-  OObjIterHasNext -> "obj-iterate-has-next?"
-  OObjIterNext -> "obj-iterate-next"
-  OObjIterKey -> "obj-iterate-key"
-  OStrStartsWith -> "str-startswith"
-  OStrLen -> "str-length"
-  OStrSplitRegExp -> "str-split-regexp"
-  OStrSplitStrExp -> "str-split-strexp"
-  OObjCanDelete -> "obj-can-delete?"
-  OMathExp -> "math-exp"
-  OMathLog -> "math-log"
-  OMathCos -> "math-cos"
-  OMathSin -> "math-sin"
-  OMathAbs -> "math-abs"
-  OMathPow -> "math-pow"
-  ORegExpQuote -> "regexp-quote"
-  ORegExpMatch -> "regexp-match"
-
+op o = case lookup o opReps of
+  Just s -> text s
+  Nothing -> error "opReps is incomplete"
 
 showNumber :: Double -> String
 showNumber i 
