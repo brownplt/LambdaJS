@@ -946,10 +946,6 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
   
 ecma262Env :: ExprPos -> ExprPos
 ecma262Env body =
-  ELet nopos [("$makeException", 
-              ELambda nopos ["name", "msg"] $ eNew 
-                (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
-                [EId nopos "msg"])] $
   ELet nopos [("@toPrimitive_String", toPrimitive' "toString" "valueOf")] $
   ELet nopos [("@toPrimitive_Number", toPrimitive' "valueOf" "toString")] $
   --ECMA 9.3
