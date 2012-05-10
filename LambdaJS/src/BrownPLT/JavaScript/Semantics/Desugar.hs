@@ -1,6 +1,6 @@
 module BrownPLT.JavaScript.Semantics.Desugar
   ( desugar
-  , desugarExpr, desugarExprSetenv
+  , desugarExpr
   , desugarStmt
   , desugarStmtsWithResult
   , toString, toNumber, toObject, toBoolean
@@ -518,11 +518,6 @@ desugarExpr e env = env (expr M.empty e)
 
 desugarStmt :: Statement SourcePos -> (ExprPos -> ExprPos) -> ExprPos
 desugarStmt s env = env (stmt M.empty s)
-
-
-desugarExprSetenv :: Expression SourcePos -> Env -> ExprPos
-desugarExprSetenv e env = expr env e
-
 
 -- |Desugar a sequence of statements, in the given environment.  Instead of
 -- producing EUndefined, the result of the sequence of statements is the

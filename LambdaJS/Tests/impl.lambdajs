@@ -5,5 +5,5 @@ if [ $# -le 0 ] ; then
   infile=/dev/stdin
 fi
 
-../dist/build/lambdaJS/lambdaJS +RTS -K100m -RTS --desugar --env ../es3.env < $infile | \
+../dist/build/lambdaJS/lambdaJS +RTS -K100m -RTS --desugar --env ../es3.env < $infile --prelude ../data/prelude.js | \
   ../../Redex/interp-shell.ss

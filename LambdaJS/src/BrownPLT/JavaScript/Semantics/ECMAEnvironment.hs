@@ -441,76 +441,6 @@ parseSrc src = case parse parseExpression "<built-in>" src of
   Right x -> x
   Left y -> error $ "Error parsing built-in src: " ++ (show y)
 
---insertion sort since too lazy to qsort.
-arraySort = parseSrc "(function (comparefn) { \n\
-\  var l = this.length; \n\
-\  var sortCompare = function(x,y) { \n\
-\    if (x === undefined && y === undefined) return 0; \n\
-\    if (x === undefined) return 1; \n\
-\    if (y === undefined) return -1; \n\
-\    if (comparefn === undefined) { \n\
-\      var xs = \"\"+x; var ys = \"\"+y; \n\
-\      if (xs < ys) return -1; \n\
-\      if (ys < xs) return 1; \n\
-\      return 0; \n\
-\    } \n\
-\    return comparefn(x,y); \n\
-\  }; \n\
-\  \n\
-\  for (var i=0; i<l-1; i++) { \n\
-\    //find the min and swarp it \n\
-\    var min = i; \n\
-\    for (var j=i+1; j<l; j++) { \n\
-\      if (sortCompare(this[j],this[i]) < 0) min = j; \n\
-\    }  \n\
-\    var tmp = this[i]; \n\
-\    this[i] = this[min]; \n\
-\    this[min] = tmp; \n\
-\  } \n\
-\ })" 
-arrayJoin = parseSrc "function (separator) {      \n\
-\  var l = this.length;  \n\
-\  if (separator === undefined) separator = \",\";   \n\
-\  separator = \"\"+separator;  \n\
-\  if (l === 0) return \"\";  \n\
-\  var R = this[0];  \n\
-\  if (R === undefined || R === null)  \n\
-\    R = \"\";  \n\
-\  else  \n\
-\    R = \"\"+R;  \n\
-\  for (var k = 1; k < l; ++k) {  \n\
-\    var S = R + separator;  \n\
-\    var x = this[k];  \n\
-\    if (x === undefined || x === null) {  \n\
-\      R = S + \"\";  \n\
-\    }  \n\
-\    else  \n\
-\      R = S + (\"\"+x);  \n\
-\  }  \n\
-\  return R;  \n\
-\ }"
-
-arrayJoinLocale = parseSrc "function () {      \n\
-\  var l = this.length;  \n\
-\  var separator = \",\";   \n\
-\  if (l === 0) return \"\";  \n\
-\  var R = this[0];  \n\
-\  if (R === undefined || R === null)  \n\
-\    R = \"\";  \n\
-\  else  \n\
-\    R = R.toLocaleString();  \n\
-\  for (var k = 1; k < l; ++k) {  \n\
-\    var S = R + separator;  \n\
-\    var x = this[k];  \n\
-\    if (x === undefined || x === null) {  \n\
-\      R = S + \"\";  \n\
-\    }  \n\
-\    else  \n\
-\      R = S + (x.toLocaleString());  \n\
-\  }  \n\
-\  return R;  \n\
-\ }"
-
 
 -- |Section 15.4.4
 arrayPrototype :: ExprPos
@@ -522,10 +452,7 @@ arrayPrototype = object
   , ("toString", functionObject [] $ checkThis "Array" $ 
       applyObj (EGetField nopos (EDeref nopos $ EId nopos "this") (EString nopos "join")) 
                (EId nopos "this") [])
-  , ("toLocaleString", desugarExprSetenv arrayJoinLocale 
-                         (M.singleton "this" True))
   , ("concat", (EString nopos "TODO: Array.prototype.concat"))
-  , ("join", desugarExprSetenv arrayJoin (M.singleton "this" True))
   , ("pop", functionObject [] $
     (EIf nopos (strictEquality (getFieldT (EString nopos "length")) (ENumber nopos 0))
          (EUndefined nopos) $
@@ -555,7 +482,6 @@ arrayPrototype = object
   , ("reverse", (EString nopos "TODO: Array.prototype.reverse"))
   , ("shift", (EString nopos "TODO: Array.prototype.shift"))
   , ("slice", (EString nopos "TODO: Array.prototype.slice"))
-  , ("sort", desugarExprSetenv arraySort (M.singleton "this" True))
   , ("splice", (EString nopos "TODO: Array.prototype.splice"))
   , ("unshift", (EString nopos "TODO: Array.prototype.unshift"))
   ]

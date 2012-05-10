@@ -5,4 +5,4 @@ then
   exit 65
 fi
 
-./dist/build/lambdaJS/lambdaJS --desugar --env es3.env < $1 | ../Redex/interp-shell.ss
+./dist/build/lambdaJS/lambdaJS --desugar --env es3.env --prelude data/prelude.js < $1 | ../Redex/interp-shell.ss

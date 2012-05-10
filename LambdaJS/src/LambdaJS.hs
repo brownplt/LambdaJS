@@ -4,8 +4,9 @@ import LambdaJS.Parser (parseBinds)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
+import BrownPLT.JavaScript.Syntax (JavaScript (..))
 import BrownPLT.JavaScript.Parser (parseScriptFromString, parseBlockStmt, 
-  parseExpression)
+  parseExpression, parseJavaScriptFromFile)
 import Text.ParserCombinators.Parsec
 import BrownPLT.JavaScript.Lexer (reservedOp, whiteSpace)
 import BrownPLT.JavaScript.Semantics.PrettyPrint
@@ -16,16 +17,17 @@ import Text.PrettyPrint.HughesPJ
 
 
 desugarMain opts = do
-  env <- case opts of
-           [EnvFile envFileName] -> do
-             f <- getEnvTransformer envFileName
-             return (\e -> f (ecma262Env e))
-           [NoEnv] -> return id
-           otherwise -> fail "spurious command-line arguments"
+  (env, prelude) <- case opts of
+                      [EnvFile envFileName, PreludeFile preludeFileName] -> do
+                        f <- getEnvTransformer envFileName
+                        prelude <- parseJavaScriptFromFile preludeFileName
+                        return (\e -> f (ecma262Env e), prelude)
+                      [NoEnv] -> return (id, [])
+                      otherwise -> fail "spurious command-line arguments"
   str <- getContents
   case parseScriptFromString "<stdin>" str of
-    Right script -> do
-      putStrLn (pretty (desugar script env))
+    Right (Script p script) -> do
+      putStrLn (pretty (desugar (Script p (prelude ++ script)) env))
       exitSuccess
     Left err -> do
       putStrLn (show err)
@@ -73,12 +75,14 @@ data Flag
   = Action ([Flag] -> IO ())
   | NoEnv
   | EnvFile String
+  | PreludeFile String
 
 options :: [OptDescr Flag]
 options =
   [ Option [] ["desugar"] (NoArg (Action desugarMain)) "desugar JavaScript"
   , Option [] ["test-cases"] (NoArg (Action testCaseMain)) "desugar test cases"
   , Option [] ["env"] (ReqArg EnvFile "FILENAME") "parse environment"
+  , Option [] ["prelude"] (ReqArg PreludeFile "FILENAME") "JavaScript prelude"
   , Option [] ["no-env"] (NoArg NoEnv) "exclude standard environment"
   ]
 
