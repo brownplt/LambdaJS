@@ -316,12 +316,6 @@ splitConstr eConstr eFunc =
       eConstr
       eFunc
       
-
-
-asVariables :: [(Ident, ExprPos)] -> [(Ident, ExprPos)]
-asVariables binds = map (\(x, e) -> (x, ERef nopos e)) binds
-
-
 -- |Section 15.1
 globalValuesAndFunctions :: [(Ident, ExprPos)] 
 globalValuesAndFunctions = 
