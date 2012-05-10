@@ -138,8 +138,9 @@
       (make-exn:λJS-throw (format "λJS (err ~s)" v) (current-continuation-marks) v))]
     [`(throw ,e)
      (raise
-      (make-exn:λJS-throw (format "λJS (throw ~s)" e)
-                          (current-continuation-marks) ((interp env) e)))]
+      (let ([v ((interp env) e)])
+        (make-exn:λJS-throw (format "λJS (throw ~s) ->> ~s" e v)
+                            (current-continuation-marks) v)))]
     [`(try-catch ,body-e (lambda (,x) ,catch-e))
      (with-handlers
          [(exn:λJS-throw?

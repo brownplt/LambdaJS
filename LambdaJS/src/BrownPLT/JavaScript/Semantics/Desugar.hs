@@ -173,7 +173,8 @@ eNewDirect eConstr argumentObj =
 
 --this is the traditional list of exprs one:
 eNew eConstr es = ELet1 nopos eConstr $ \c ->
-  eNewDirect (EId nopos c) (ERef nopos $ ERef nopos $ eArgumentsObj es (EId nopos c))
+  eNewDirect (EId nopos c) 
+             (ERef nopos $ ERef nopos $ eArgumentsObj es (EId nopos c))
 
 newError name msg = 
   EApp nopos (EId nopos "$makeException") 

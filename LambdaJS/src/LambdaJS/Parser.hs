@@ -104,7 +104,7 @@ getUpdateField e1 = do
 deleteField = do
   p <- getPosition
   reserved "delete"
-  e1 <- expr
+  e1 <- term
   e2 <- squares expr
   return (EDeleteField p e1 e2)
 
@@ -175,8 +175,21 @@ infixExpr str constr = Infix parser AssocLeft
           reservedOp str
           return (\e1 e2 -> EOp p constr [e1, e2])
 
+andMacro = Infix parser AssocLeft
+  where parser = do
+          p <- getPosition
+          reservedOp "&&"
+          return (\e1 e2 -> EIf p e1 e2 (EBool p False))
+
+orMacro = Infix parser AssocLeft
+  where parser = do
+          p <- getPosition
+          reservedOp "||"
+          return (\e1 e2 -> EIf p e1 (EBool p True) e2)
+
 exprTable =
   [ [ infixExpr "===" OStrictEq ],
+    [ andMacro, orMacro ],
     [ setref ] ]
 
 
@@ -204,8 +217,8 @@ op = do
 
 expr = chainr1 exp seq
   where exp = if_ <|> while <|> deleteField <|>  tryCatchFinally <|> 
-                label <|> break <|> lambda <|> let_ <|> throw <|> expr' <|>
-                op
+                label <|> break <|> lambda <|> let_ <|> throw <|>
+                op <|> expr'
         seq = do
           p <- getPosition
           semi

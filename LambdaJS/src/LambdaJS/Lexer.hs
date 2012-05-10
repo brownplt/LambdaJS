@@ -33,7 +33,7 @@ def = T.LanguageDef {
                     "break", "throw", "try", "catch", "finally", "typeof", 
                     "op" ],
   reservedOpNames = [ ".", ",", "{", "}", "(", ")", "=", ":=", "!", "[", "]",
-                      ";" ],
+                      ";", "&&", "||" ],
   caseSensitive = False
 }
 

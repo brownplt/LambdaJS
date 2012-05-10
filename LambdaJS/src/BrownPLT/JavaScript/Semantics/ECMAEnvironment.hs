@@ -254,37 +254,6 @@ toPrimitive' first second =
               exc
     exc = (EThrow nopos $ newError "TypeError" "cannot convert obj to primitive")
 
-
---takes our expressions, writes out a new
---this takes in an arguments obj directly. used from String.split.
---TODO--sourcepos here?
-newDirect :: ExprPos
-newDirect = 
-  ELambda nopos ["$constr", "@argObj"] $
-    EIf nopos (eNot $ isRefComb isFunctionObj (EId nopos "$constr"))
-        (EThrow nopos $ newError "TypeError" "new not given function")
-        --[[Construct]], 13.2.2 . it's always the same,
-        --so no need to have it be a $constr field (like $call)
-         (ELet nopos [("$protoField", 
-                EGetField nopos (EDeref nopos (EId nopos "$constr")) (EString nopos "prototype"))] $
-          ELet nopos [("$protoObj",
-                 EIf nopos (isRefComb isObject (EId nopos "$protoField"))
-                     (EId nopos "$protoField")
-                     (EId nopos "@Object_prototype"))] $
-            ELet nopos [("$newObj", 
-                   ERef nopos $ EObject nopos [("$constructing", EBool nopos True),
-                                   ("$class", EString nopos "Object"),
-                                   ("$proto", EId nopos "$protoField")])] $
-              ELet1 nopos (EApp nopos (EGetField nopos (EDeref nopos (EId nopos "$constr"))(EString nopos "$code"))
-                         [EId nopos "$newObj", EId nopos "@argObj"]) $ \newResult ->
-                EIf nopos (isRefComb isObject (EId nopos newResult))
-                    (EId nopos newResult)
-                    (ESeq nopos (ESetRef nopos (EId nopos "$newObj")
-                      (EDeleteField nopos (EDeref nopos $ EId nopos "$newObj")
-                                    (EString nopos "$constructing")))
-                      (EId nopos "$newObj")))
-
-
 object :: [(Ident, ExprPos)] -> ExprPos
 object props = EObject nopos $ map (\(x, e) -> (x, e)) props
 
@@ -977,7 +946,6 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
   
 ecma262Env :: ExprPos -> ExprPos
 ecma262Env body =
-  ELet nopos [("@newDirect", newDirect)] $
   ELet nopos [("$makeException", 
               ELambda nopos ["name", "msg"] $ eNew 
                 (EGetField nopos (EDeref nopos $ EId nopos "$global") (EId nopos "name"))
