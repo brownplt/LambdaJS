@@ -25,7 +25,7 @@ def = T.LanguageDef {
   commentLine = "//",
   nestedComments = True,
   identStart = letter <|> oneOf "$_@",
-  identLetter = alphaNum <|> oneOf "$_",
+  identLetter = alphaNum <|> oneOf "$_-><",
   opStart = oneOf "{}<>()~.,?:|&^=!+-*/%![]",
   opLetter = oneOf "=<>|&+",
   reservedNames = [ "true", "false", "fun", "let", "in", "and", "ref",

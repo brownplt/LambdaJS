@@ -219,44 +219,8 @@ makePrefixOp op =
   ("@" ++ show op,
    ELambda nopos ["@x"] (prefixOp' op (EId nopos "@x")))
              
-
--- |According to the specification, toPrimitive may signal a TypeError.
--- this is generalized to do either toString first, or valueOf first,
--- based on the 'hint'
--- Even though GetValue'd values are given to ToPrimitive in ECMA,
--- here we need ERefs because we will apply functions.
--- So make sure you give this ERef (EObject) if you get an object.
-toPrimitive' :: String -> String -> ExprPos
-toPrimitive' first second = 
-  --if it's an object ref, then convert it with methods
-  --otherwise it is already primitive, so just return it.
-  ELambda nopos ["$x"] $ 
-    EIf nopos (isLocation (EId nopos "$x"))
-        cvt
-        (EId nopos "$x")
-  -- [[DefaultValue]] (8.6.2.6)
-  where 
-    --if valueOf is a function, try it. else try tostr.
-    cvt = ELet nopos [("$vOf", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos first)))] $    
-            EIf nopos (isRefComb isFunctionObj (EId nopos "$vOf"))
-              (ELet nopos [("$vRes", applyObj (EId nopos "$vOf") (EId nopos "$x") [])] $
-                EIf nopos (isPrim (EId nopos "$vRes"))
-                    (EId nopos "$vRes")
-                    str)
-              str
-    --if toString is a function, try it. else throw excp
-    str = ELet nopos [("$toStr", (EGetField nopos (EDeref nopos (EId nopos "$x")) (EString nopos second)))] $
-            EIf nopos (isRefComb isFunctionObj (EId nopos "$toStr"))
-              (ELet nopos [("$tRes", applyObj (EId nopos "$toStr") (EId nopos "$x") [])] $
-                EIf nopos (isPrim (EId nopos "$tRes"))
-                    (EId nopos "$tRes")
-                    exc)
-              exc
-    exc = (EThrow nopos $ newError "TypeError" "cannot convert obj to primitive")
-
 object :: [(Ident, ExprPos)] -> ExprPos
 object props = EObject nopos $ map (\(x, e) -> (x, e)) props
-
 
 -- |helper to have already bound IDs
 lambda :: [Ident] -> ExprPos -> ExprPos
@@ -946,14 +910,6 @@ setConstructors = foldr (ESeq nopos) (EUndefined nopos) $ map doit constrNames
   
 ecma262Env :: ExprPos -> ExprPos
 ecma262Env body =
-  ELet nopos [("@toPrimitive_String", toPrimitive' "toString" "valueOf")] $
-  ELet nopos [("@toPrimitive_Number", toPrimitive' "valueOf" "toString")] $
-  --ECMA 9.3
-  --once again, must get object refs to pass them in as 'this' in toPrimitive
-  ELet nopos [("@toNumber", ELambda nopos ["$toNum"] $
-                EIf nopos (isLocation (EId nopos "$toNum"))
-                    (primToNum $ toPrimitive_Number (EId nopos "$toNum"))
-                    (primToNum (EId nopos "$toNum")))] $
   ELet nopos [makeInfixOp OpGT] $
   ELet nopos [makeInfixOp OpLT] $
   ELet nopos [makeInfixOp OpGEq] $

@@ -4,7 +4,7 @@ module BrownPLT.JavaScript.Semantics.Desugar
   , desugarStmt
   , desugarStmtsWithResult
   , toString, toNumber, toObject, toBoolean
-  , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation, isPrim
+  , isNumber, isUndefined, isRefComb, isObject, isNull, isLocation
   , isFunctionObj
   , primToStr, primToNum, toPrimitive, strictEquality
   , toPrimitive_Number
@@ -71,7 +71,6 @@ isObject e = typeIs e "object"
 isLocation e = typeIs e "location"
 isLambda e = typeIs e "lambda"
 isString e = typeIs e "string"
-isPrim e = EOp nopos OIsPrim [e]
 isNumber e = typeIs e "number"
 isUndefined e = typeIs e "undefined"
 isNull e = strictEquality e (ENull nopos)
