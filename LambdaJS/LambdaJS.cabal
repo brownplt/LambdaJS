@@ -1,8 +1,8 @@
 Name:           LambdaJS
-Version:        1.0
+Version:        1.2
 Cabal-Version:	>= 1.2.3
-Copyright:      Copyright (c) 2009 Arjun Guha and Claudiu Saftoiu
-License:        LGPL
+Copyright:      Copyright (c) 2009--2012 Brown University and Claudiu Saftoiu
+License:        BSD3
 License-file:   ../LICENSE
 Author:         Arjun Guha, Claudiu Saftoiu
 Maintainer:     Arjun Guha <arjun@cs.brown.edu>
@@ -58,4 +58,3 @@ Executable lambdaJS
     -fwarn-incomplete-patterns -rtsopts
   Extensions:     
     DeriveDataTypeable Rank2Types FlexibleInstances
-
