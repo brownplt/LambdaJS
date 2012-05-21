@@ -8,9 +8,9 @@ import qualified Data.Set as S
 
 
 data Partial
-  = Partial (Set String) -- ^variables bound in this scope block
-            (Set String) -- ^variables assigned to in this scope block
-            [Partial] -- ^enclosing scopes
+  = Partial (Set String) -- variables bound in this scope block
+            (Set String) -- variables assigned to in this scope block
+            [Partial]    -- enclosing scopes
 
 
 empty :: Partial

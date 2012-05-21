@@ -13,35 +13,32 @@ Build-Type:     Custom
 Synopsis:       Compiler from JavaScript to LambdaJS.
 Description:
 
-
--- Library
---   Hs-Source-Dirs: src
---   Build-Depends:
---     base >= 4 && < 5,
---     mtl >= 1.1.0.1,
---     parsec >= 3.0.0,
---     pretty >= 0.1, 
---     containers >= 0.1,
---     syb >= 0.1,
---     WebBits >= 2.1
---   ghc-options:
---     -fwarn-incomplete-patterns 
---   Extensions:     
---     DeriveDataTypeable Rank2Types FlexibleInstances
---   Exposed-Modules:
---     BrownPLT.JavaScript.Semantics.Desugar
---     BrownPLT.JavaScript.Semantics.ECMAEnvironment
---     BrownPLT.JavaScript.Semantics.DesugarWith
---     BrownPLT.JavaScript.Semantics.LiftFuncStmts
---     BrownPLT.JavaScript.Semantics.PrettyPrint
---     BrownPLT.JavaScript.Semantics.LocalVars
---     BrownPLT.JavaScript.Semantics.Syntax
---     BrownPLT.JavaScript.Semantics.RemoveHOAS
---     BrownPLT.JavaScript.Semantics.FreeVars
---     BrownPLT.JavaScript.Semantics.AssignableVars
---   Other-Modules:
---     BrownPLT.JavaScript.Semantics.Prelude
-
+Library
+  Hs-Source-Dirs: src
+  Build-Depends:
+    base >= 4 && < 5,
+    mtl >= 1.1.0.1,
+    parsec >= 3.0.0,
+    pretty >= 0.1, 
+    containers >= 0.1,
+    syb >= 0.1,
+    WebBits >= 2.1
+  ghc-options:
+    -fwarn-incomplete-patterns 
+  Extensions:     
+    DeriveDataTypeable Rank2Types FlexibleInstances
+  Exposed-Modules:
+    BrownPLT.JavaScript.Semantics.Desugar
+    BrownPLT.JavaScript.Semantics.ECMAEnvironment
+    BrownPLT.JavaScript.Semantics.DesugarWith
+    BrownPLT.JavaScript.Semantics.LiftFuncStmts
+    BrownPLT.JavaScript.Semantics.PrettyPrint
+    BrownPLT.JavaScript.Semantics.LocalVars
+    BrownPLT.JavaScript.Semantics.Syntax
+    BrownPLT.JavaScript.Semantics.RemoveHOAS
+    BrownPLT.JavaScript.Semantics.AssignableVars
+  Other-Modules:
+    BrownPLT.JavaScript.Semantics.Prelude
 
 Executable lambdaJS
   Main-Is: LambdaJS.hs
