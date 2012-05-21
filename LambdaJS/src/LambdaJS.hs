@@ -1,6 +1,6 @@
 module Main where
 
-import LambdaJS.Parser (parseBinds)
+import Language.LambdaJS.Parser (parseBinds)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -9,10 +9,10 @@ import BrownPLT.JavaScript.Parser (parseScriptFromString, parseBlockStmt,
   parseExpression, parseJavaScriptFromFile)
 import Text.ParserCombinators.Parsec
 import BrownPLT.JavaScript.Lexer (reservedOp, whiteSpace)
-import BrownPLT.JavaScript.Semantics.PrettyPrint
-import BrownPLT.JavaScript.Semantics.Syntax
-import BrownPLT.JavaScript.Semantics.Desugar
-import BrownPLT.JavaScript.Semantics.ECMAEnvironment
+import Language.LambdaJS.PrettyPrint
+import Language.LambdaJS.Syntax
+import Language.LambdaJS.Desugar
+import Language.LambdaJS.ECMAEnvironment
 import Text.PrettyPrint.HughesPJ
 
 

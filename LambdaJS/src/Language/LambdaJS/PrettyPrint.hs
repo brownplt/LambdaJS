@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.PrettyPrint
+module Language.LambdaJS.PrettyPrint
   ( pretty
   , op
   , renderExpr
@@ -6,7 +6,7 @@ module BrownPLT.JavaScript.Semantics.PrettyPrint
   ) where
 
 
-import BrownPLT.JavaScript.Semantics.Syntax
+import Language.LambdaJS.Syntax
 import Text.PrettyPrint.HughesPJ
 import Control.Monad.State
 

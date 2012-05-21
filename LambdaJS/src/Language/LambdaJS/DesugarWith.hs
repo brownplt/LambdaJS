@@ -27,10 +27,10 @@
 --             // outer: for lexical x, check if obj1.hasOwnProperty("x"),
 --             //        else x is lexical
 -- @
-module BrownPLT.JavaScript.Semantics.DesugarWith (desugarWith) where
+module Language.LambdaJS.DesugarWith (desugarWith) where
 
 import qualified Data.Set as S
-import BrownPLT.JavaScript.Semantics.Syntax
+import Language.LambdaJS.Syntax
 
 type Env = S.Set Ident
 

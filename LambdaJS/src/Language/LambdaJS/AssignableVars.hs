@@ -1,8 +1,8 @@
-module BrownPLT.JavaScript.Semantics.AssignableVars
+module Language.LambdaJS.AssignableVars
   ( assignableVars
   ) where
 
-import BrownPLT.JavaScript.Semantics.Prelude
+import Language.LambdaJS.Prelude
 import BrownPLT.JavaScript.Syntax
 import qualified Data.Set as S
 

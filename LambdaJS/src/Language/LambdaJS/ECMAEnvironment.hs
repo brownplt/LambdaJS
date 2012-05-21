@@ -1,9 +1,9 @@
-module BrownPLT.JavaScript.Semantics.ECMAEnvironment
+module Language.LambdaJS.ECMAEnvironment
   ( ecma262Env
   ) where
 
-import BrownPLT.JavaScript.Semantics.Desugar
-import BrownPLT.JavaScript.Semantics.Syntax
+import Language.LambdaJS.Desugar
+import Language.LambdaJS.Syntax
 import Text.ParserCombinators.Parsec
 import BrownPLT.JavaScript.Syntax (InfixOp (..), PrefixOp (..))
 import BrownPLT.JavaScript.Parser (parseExpression)

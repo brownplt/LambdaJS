@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.Syntax
+module Language.LambdaJS.Syntax
   ( Ident
   , Label
   , Op(..)
@@ -18,7 +18,7 @@ import Data.Maybe ( fromMaybe, fromJust )
 import Data.Map (Map,(!))
 import Data.Generics
 
-import BrownPLT.JavaScript.Semantics.Prelude
+import Language.LambdaJS.Prelude
 
 import Text.ParserCombinators.Parsec(SourcePos) -- used by data JavaScript
 import Text.ParserCombinators.Parsec.Pos(newPos) -- used by data JavaScript

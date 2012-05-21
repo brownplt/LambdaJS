@@ -1,10 +1,10 @@
 -- |Lifts function statements to the enclosing block, and turn them into
 -- function expressions.
-module BrownPLT.JavaScript.Semantics.LiftFuncStmts
+module Language.LambdaJS.LiftFuncStmts
   ( liftFuncStmts
   ) where
 
-import BrownPLT.JavaScript.Semantics.Prelude
+import Language.LambdaJS.Prelude
 import BrownPLT.JavaScript
 import Data.Generics
 

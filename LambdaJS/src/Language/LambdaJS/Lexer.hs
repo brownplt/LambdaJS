@@ -1,4 +1,4 @@
-module LambdaJS.Lexer
+module Language.LambdaJS.Lexer
   ( lexeme
   , identifier
   , reserved

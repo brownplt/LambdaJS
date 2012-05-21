@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.LocalVars
+module Language.LambdaJS.LocalVars
   ( localVars
   ) where
 

@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.Prelude
+module Language.LambdaJS.Prelude
   ( collectExclude
   , everywhereUpto
   , everythingUpto

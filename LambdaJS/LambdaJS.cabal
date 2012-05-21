@@ -28,17 +28,17 @@ Library
   Extensions:     
     DeriveDataTypeable Rank2Types FlexibleInstances
   Exposed-Modules:
-    BrownPLT.JavaScript.Semantics.Desugar
-    BrownPLT.JavaScript.Semantics.ECMAEnvironment
-    BrownPLT.JavaScript.Semantics.DesugarWith
-    BrownPLT.JavaScript.Semantics.LiftFuncStmts
-    BrownPLT.JavaScript.Semantics.PrettyPrint
-    BrownPLT.JavaScript.Semantics.LocalVars
-    BrownPLT.JavaScript.Semantics.Syntax
-    BrownPLT.JavaScript.Semantics.RemoveHOAS
-    BrownPLT.JavaScript.Semantics.AssignableVars
+    Language.LambdaJS.Desugar
+    Language.LambdaJS.ECMAEnvironment
+    Language.LambdaJS.DesugarWith
+    Language.LambdaJS.LiftFuncStmts
+    Language.LambdaJS.PrettyPrint
+    Language.LambdaJS.LocalVars
+    Language.LambdaJS.Syntax
+    Language.LambdaJS.RemoveHOAS
+    Language.LambdaJS.AssignableVars
   Other-Modules:
-    BrownPLT.JavaScript.Semantics.Prelude
+    Language.LambdaJS.Prelude
 
 Executable lambdaJS
   Main-Is: LambdaJS.hs

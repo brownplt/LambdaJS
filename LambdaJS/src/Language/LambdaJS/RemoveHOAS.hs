@@ -1,10 +1,10 @@
-module BrownPLT.JavaScript.Semantics.RemoveHOAS
+module Language.LambdaJS.RemoveHOAS
   ( removeHOAS
   ) where
 
 import Control.Monad.State
 import Control.Monad
-import BrownPLT.JavaScript.Semantics.Syntax
+import Language.LambdaJS.Syntax
 
 
 type M a = State Int a

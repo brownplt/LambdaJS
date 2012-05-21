@@ -1,13 +1,13 @@
-module LambdaJS.Parser
+module Language.LambdaJS.Parser
   ( parseBinds
   ) where
 
 import Prelude hiding (id, break, undefined, null, seq)
-import LambdaJS.Lexer
+import Language.LambdaJS.Lexer
 import Text.Parsec hiding (label, string)
 import Text.Parsec.Expr
-import BrownPLT.JavaScript.Semantics.Syntax hiding (label)
-import BrownPLT.JavaScript.Semantics.PrettyPrint (opReps)
+import Language.LambdaJS.Syntax hiding (label)
+import Language.LambdaJS.PrettyPrint (opReps)
 import Control.Monad
 import Debug.Trace
 

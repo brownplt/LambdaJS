@@ -1,4 +1,4 @@
-module BrownPLT.JavaScript.Semantics.Desugar
+module Language.LambdaJS.Desugar
   ( desugar
   , desugarExpr
   , desugarStmt
@@ -23,11 +23,11 @@ import Data.Set (Set)
 import Data.List
 import Text.ParserCombinators.Parsec.Pos (SourcePos)
 import BrownPLT.JavaScript.Syntax
-import BrownPLT.JavaScript.Semantics.Syntax
-import BrownPLT.JavaScript.Semantics.LocalVars
-import BrownPLT.JavaScript.Semantics.LiftFuncStmts
-import BrownPLT.JavaScript.Semantics.DesugarWith
-import BrownPLT.JavaScript.Semantics.AssignableVars (assignableVars)
+import Language.LambdaJS.Syntax
+import Language.LambdaJS.LocalVars
+import Language.LambdaJS.LiftFuncStmts
+import Language.LambdaJS.DesugarWith
+import Language.LambdaJS.AssignableVars (assignableVars)
 
 prop :: Prop a -> String
 prop p = case p of
