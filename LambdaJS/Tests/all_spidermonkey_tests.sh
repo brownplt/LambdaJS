@@ -35,3 +35,4 @@ do
 done
 
 echo "$numTests test(s) tried. $failures test(s) failed. $thirdpartyfailures third party test(s) failed."
+date
