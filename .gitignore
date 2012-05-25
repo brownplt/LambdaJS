@@ -1,3 +1,8 @@
 /*/dist
 .DS_Store
 /Redex/compiled
+*~
+*.vo
+*.glob
+*.v.d
+coq/Makefile
