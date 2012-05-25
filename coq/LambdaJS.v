@@ -1,6 +1,5 @@
 (* 
- * Mechanized LambdaJS
- * Copyright (c) 2012 Brown University
+ * An encoding of the untyped lambda calculus with numbers.
  *
  * Authors: 
  *   Arjun Guha <arjun@cs.brown.edu>
@@ -1265,25 +1264,18 @@ Ltac invert_val' := repeat match goal with
     => (inversion IH; clear IH)
 end.
 
-Ltac multi_solve_decomp := match goal with
-  |  [ HLC : lc' 0 ?e',
-       H :  lc' 0 ?e' -> val' ?e \/  (exists E : E, exists ae : exp, decompose ?e E ae)
-       |- _ ] => 
-       assert (val' e \/  (exists E : E, exists ae : exp, decompose e E ae)) by (apply H; exact HLC);
-       clear H;
-       multi_solve_decomp
-  |  [ H :  val' ?e \/ 
-            (exists E : E, exists ae : exp, decompose ?e E ae)
-       |- _ ] =>
-      let V := fresh "V" in
-      let E := fresh "E" in
-      let ae := fresh "ae" in
-      let H' := fresh "H" in
-      destruct H as [V | [E [ae H']]]; multi_solve_decomp 
-  | [ H : val' ?e |- _ ]
-    => inversion H; clear H; multi_solve_decomp
-  | _ => subst; eauto 10
-end.
+Ltac solve_break_err H e :=
+  let HV := fresh "HV" in 
+  let HE := fresh "HE" in 
+    destruct H as [HV | HE]; [idtac | destruct_decomp e; eauto 7];
+    subst; eauto; inversion HV; clear HV; eauto; 
+      [ right; exists E_hole; eapply ex_intro; apply cxt_hole; 
+        try solve [apply redex_err_bubble; auto | constructor; auto]
+      | subst
+      | right; exists E_hole; eapply ex_intro; apply cxt_hole; 
+        match goal with 
+        | [ H: exp_break ?x ?v = _ |- _] => try solve [apply redex_break with x v; auto; constructor; auto| constructor; auto]
+        end]. 
 
 Lemma decomp : forall e,
   lc e -> val' e \/ 
@@ -1294,9 +1286,25 @@ unfold lc in H.
 remember 0.
 remember H as LC. clear HeqLC.
 move H after LC.
-lc_cases (induction H) Case; intros; subst; clean_decomp; try solve [ inversion LC; multi_solve_decomp ].
+lc_cases (induction H) Case; intros; subst; clean_decomp; try solve [inversion LC; subst; repeat match goal with
+|  [ H :  lc' 0 ?e -> val' ?e \/ _ ,
+          (* should be  val ?e' \/ (exists (E : E) (ae : exp), decomposition ?e E ae), but coq8.4 chokes on it *)
+     HLC : lc' 0 ?e
+   |- _ ] => let H' := fresh in assert (H' := H HLC); clear H
+| [ LC1 : lc' _ ?e1, H : val' ?e1 \/ _ |- val' (_ ?e1) \/ _ ] => solve_break_err H e1
+| [ LC1 : lc' _ ?e1, H : val' ?e1 \/ _ |- val' (_ ?e1 _) \/ _ ] => solve_break_err H e1
+| [ LC2 : lc' _ ?e2, H : val' ?e2 \/ _ |- val' (_ _ ?e2) \/ _ ] => solve_break_err H e2
+| [ LC1 : lc' _ ?e1, H : val' ?e1 \/ _ |- val' (_ ?e1 _ _) \/ _ ] => solve_break_err H e1
+| [ LC2 : lc' _ ?e2, H : val' ?e2 \/ _ |- val' (_ _ ?e2 _) \/ _ ] => solve_break_err H e2
+| [ LC3 : lc' _ ?e3, H : val' ?e3 \/ _ |- val' (_ _ _ ?e3) \/ _ ] => solve_break_err H e3
+end; eauto 7].
 Case "lc_bvar".
   inversion H.
+Case "lc_break".
+  inversion IH. 
+    inversion H0. right. exists E_hole. repeat eapply ex_intro. apply cxt_hole. apply redex_err_bubble... left...
+    right. eapply ex_intro; eapply ex_intro; apply cxt_hole. eapply redex_break...
+  destruct_decomp e. right; exists (E_break x E); exists ae; auto.
 Case "lc_obj".
   assert (forall x : string * exp, In x l -> decidable (val (snd x))). intros; apply decide_val.
   assert (Split := (take_while l (fun kv => val (snd kv)) H1)).
@@ -1339,14 +1347,15 @@ end.
 
 Lemma progress : forall sto e,
   lc e ->
-  val' e \/ (exists e', exists sto', step sto e sto' e').
+  val e \/ e = exp_err \/ (exists e', exists sto', step sto e sto' e').
 Proof with eauto.
 intros.
 remember H as HLC; clear HeqHLC.
 apply decomp in H.
-destruct H...
+destruct H. destruct H...
+right. right. exists exp_err. exists sto0. auto.
 destruct_decomp e...
-right.
+right. right.
 assert (LC.ae ae). apply decompose_ae in H...
 
 
