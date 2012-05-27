@@ -16,34 +16,10 @@ Require Import Coq.Strings.String.
 Require Import Coq.Logic.Decidable.
 Require Import Omega.
 Require Import SfLib.
-Set Implicit Arguments.
 Require Import ListExt.
+Require Import Datatypes.
+Set Implicit Arguments.
 
-Module Type ATOM.
-
-  Parameter atom : Set.
-  Declare Module Atom_as_OT : UsualOrderedType with Definition t := atom.
-  Declare Module Ordered : Coq.Structures.OrderedType.OrderedType 
-    with Definition t := atom.
-  Module OrderedTypeFacts := Coq.Structures.OrderedType.OrderedTypeFacts (Ordered).
-  Parameter atom_fresh_for_list : forall (xs : list atom), 
-    exists x : atom, ~ List.In x xs.
-  Parameter atom_eq_dec : forall a1 a2 : atom, {a1 = a2} + {~ a1 = a2}.
-  Parameter atom_dec_eq : forall a1 a2 : atom, a1 = a2 \/ ~ a1 = a2.
-
-End ATOM.
-
-Module Type STRING.
-
- Parameter string : Set.
- Declare Module String_as_OT : UsualOrderedType with Definition t := string.
- Declare Module Ordered : Coq.Structures.OrderedType.OrderedType
-   with Definition t := string.
- Module OrderedTypeFacts := Coq.Structures.OrderedType.OrderedTypeFacts (Ordered).
- Parameter string_eq_dec : forall s1 s2 : string, {s1 = s2} + {~ s1 = s2}.
- Parameter string_dec_eq : forall s1 s2 : string, s1 = s2 \/ ~ s1 = s2.
-
-End STRING.
 
 Module LC (Import Atom : ATOM) (Import String : STRING).
 
@@ -1214,7 +1190,7 @@ Proof with eauto. intros; subst... tauto. Qed.
 Lemma plug_ok : forall e E e',
   decompose e E e' -> plug e' E = e.
 Proof.
-intros. Print decompose.
+intros.
 decompose_cases (induction H) Case; simpl; try (auto || rewrite -> IHdecompose; auto).
 Qed.
 
@@ -1472,7 +1448,7 @@ Case "exp_bvar".
   SCase "k = n". 
     rewrite <- beq_nat_true_iff in e.
     rewrite -> e.  apply lc_ascend with (k := 0) (k' := k)... omega.
-  SCase "k > n". Check beq_nat.
+  SCase "k > n".
     assert (beq_nat k n = false). rewrite -> beq_nat_false_iff... omega.
     rewrite -> H1...
 Case "exp_obj".
