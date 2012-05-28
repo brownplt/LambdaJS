@@ -1,5 +1,5 @@
 (* 
- * An encoding of the untyped lambda calculus with numbers.
+ * Mechanized LambdaJS
  *
  * Authors: 
  *   Arjun Guha <arjun@cs.brown.edu>
