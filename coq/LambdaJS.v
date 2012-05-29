@@ -119,7 +119,7 @@ assert (l = l0 \/ l <> l0).
   remember a1 as a1'; destruct a1'. remember a2 as a2'; destruct a2'.
   assert (EqS := string_dec_eq s s0). inversion EqS; [auto | right; congruence].
   assert (e = e0 \/ e <> e0). apply H. apply in_split_r in H1. simpl in H1. 
-  replace (map (snd (B:=exp)) l) with (snd (split l)). auto. symmetry; apply map_snd_snd_split.
+  rewrite map_snd_snd_split. auto.
   inversion H4; [left; subst; auto | right; congruence].
 inversion H1; [left; subst; auto | right; congruence].
 Qed.
