@@ -191,8 +191,7 @@ Inductive E : Set :=
   | E_throw   : E -> E
   | E_seq   : E -> exp -> E
   | E_finally  : E -> exp -> E
-  | E_obj     : forall (vs : list (string * exp)) (es : list (string * exp)), 
-                  (Forall val (values vs)) -> string -> E -> E
+  | E_obj     : list (string * exp) -> string -> E -> list (string * exp) -> E
   | E_getfield1 : E -> exp -> E
   | E_getfield2 : exp -> E -> E
   | E_setfield1 : E -> exp -> exp -> E
@@ -392,7 +391,7 @@ Inductive decompose : exp -> E -> exp -> Prop :=
       decompose (exp_finally e1 e2) (E_finally E e2) ae
   | cxt_obj  : forall vs es k e E e' (are_vals : Forall val (values vs)),
       decompose e E e' ->
-      decompose (exp_obj (vs++(k,e)::es)) (E_obj vs es are_vals k E) e'
+      decompose (exp_obj (vs++(k,e)::es)) (E_obj vs k E es) e'
   | cxt_getfield1 : forall o f E ae,
       decompose o E ae ->
       decompose (exp_getfield o f) (E_getfield1 E f) ae
@@ -437,7 +436,7 @@ Fixpoint plug (e : exp) (cxt : E) := match cxt with
   | E_throw cxt    => exp_throw (plug e cxt)
   | E_seq cxt e2   => exp_seq (plug e cxt) e2
   | E_finally cxt e2 => exp_finally (plug e cxt) e2
-  | E_obj vs es _ k cxt => exp_obj (vs++(k,plug e cxt)::es)
+  | E_obj vs k cxt es  => exp_obj (vs++(k,plug e cxt)::es)
   | E_getfield1 cxt f => exp_getfield (plug e cxt) f
   | E_getfield2 v cxt => exp_getfield v (plug e cxt)
   | E_setfield1 cxt f e' => exp_setfield (plug e cxt) f e'

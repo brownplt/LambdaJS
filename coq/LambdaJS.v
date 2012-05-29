@@ -494,7 +494,7 @@ Case "lc_obj".
           apply redex_break with (x := x2) (v := v). trivial.
           constructor. constructor. trivial. auto.
       SSCase "e is not a val'".
-        inversion H7. inversion H8. right. exists (E_obj x x0 H4 s x2). exists x3. 
+        inversion H7. inversion H8. right. exists (E_obj x s x2 x0). exists x3. 
         rewrite H2. apply cxt_obj...
 Qed.
 
