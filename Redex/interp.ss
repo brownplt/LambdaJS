@@ -19,7 +19,7 @@
 ;;;   break-exceptions that are intended for encloding labelled expressions.
 ;;; - A break-handler around function applications prevent breaks from
 ;;;   crossing function boundaries.  This has the side-effect of faithfully
-;;;   modelling JavaScript's lack of tail calls.bu
+;;;   modelling JavaScript's lack of tail calls.
 (provide interp
          empty-env)
 
