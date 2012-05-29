@@ -1,2 +1,2 @@
 #!/bin/bash
-coq_makefile SfLib.v ListExt.v Datatypes.v LambdaJS_Defs.v LambdaJS.v > Makefile
+coq_makefile SfLib.v ListExt.v Datatypes.v LambdaJS_Defs.v LambdaJS_Tactics.v LambdaJS.v > Makefile
