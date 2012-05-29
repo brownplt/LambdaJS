@@ -338,85 +338,85 @@ Inductive ae : exp -> Prop :=
   | redex_delfield : forall o f, val o -> val f -> ae (exp_delfield o f)
 .
 
-Inductive decompose : exp -> C -> exp -> Prop :=
-  | cxt_hole : forall e,
+Inductive E : exp -> C -> exp -> Prop :=
+  | E_hole : forall e,
       ae e ->
-      decompose e C_hole e
-  | cxt_app_1 : forall C e1 e2 e',
-      decompose e1 C e' ->
-      decompose (exp_app e1 e2) (C_app_1 C e2) e'
-  | cxt_app_2 : forall C v e e',
+      E e C_hole e
+  | E_app_1 : forall C e1 e2 e',
+      E e1 C e' ->
+      E (exp_app e1 e2) (C_app_1 C e2) e'
+  | E_app_2 : forall C v e e',
       val v ->
-      decompose e C e' ->
-      decompose (exp_app v e) (C_app_2 v C) e'
-  | cxt_succ : forall C e e',
-      decompose e C e' ->
-      decompose (exp_succ e) (C_succ C) e'
-  | cxt_not : forall C e e',
-      decompose e C e' ->
-      decompose (exp_not e) (C_not C) e'
-  | cxt_if : forall C e e1 e2 e',
-      decompose e C e' ->
-      decompose (exp_if e e1 e2) (C_if C e1 e2) e'
-  | cxt_break : forall x e C ae,
-      decompose e C ae ->
-      decompose (exp_break x e) (C_break x C) ae
-  | cxt_label : forall x e C ae,
-      decompose e C ae ->
-      decompose (exp_label x e) (C_label x C) ae
-  | cxt_ref : forall e C ae,
-     decompose e C ae ->
-     decompose (exp_ref e) (C_ref C) ae
-  | cxt_deref : forall e C ae,
-     decompose e C ae ->
-     decompose (exp_deref e) (C_deref C) ae
-  | cxt_set1 : forall e1 e2 C ae,
-      decompose e1 C ae ->
-      decompose (exp_set e1 e2) (C_setref1 C e2) ae
-  | cxt_set2 : forall e1 e2 C ae,
+      E e C e' ->
+      E (exp_app v e) (C_app_2 v C) e'
+  | E_succ : forall C e e',
+      E e C e' ->
+      E (exp_succ e) (C_succ C) e'
+  | E_not : forall C e e',
+      E e C e' ->
+      E (exp_not e) (C_not C) e'
+  | E_if : forall C e e1 e2 e',
+      E e C e' ->
+      E (exp_if e e1 e2) (C_if C e1 e2) e'
+  | E_break : forall x e C ae,
+      E e C ae ->
+      E (exp_break x e) (C_break x C) ae
+  | E_label : forall x e C ae,
+      E e C ae ->
+      E (exp_label x e) (C_label x C) ae
+  | E_ref : forall e C ae,
+     E e C ae ->
+     E (exp_ref e) (C_ref C) ae
+  | E_deref : forall e C ae,
+     E e C ae ->
+     E (exp_deref e) (C_deref C) ae
+  | E_set1 : forall e1 e2 C ae,
+      E e1 C ae ->
+      E (exp_set e1 e2) (C_setref1 C e2) ae
+  | E_set2 : forall e1 e2 C ae,
       val e1 ->
-      decompose e2 C ae ->
-      decompose (exp_set e1 e2) (C_setref2 e1 C) ae
-  | cxt_throw : forall e C ae,
-      decompose e C ae ->
-      decompose (exp_throw e) (C_throw C) ae
-  | cxt_catch : forall e1 e2 C ae,
-      decompose e1 C ae ->
-      decompose (exp_catch e1 e2) (C_catch C e2) ae
-  | cxt_seq : forall C e1 e2 ae,
-      decompose e1 C ae ->
-      decompose (exp_seq e1 e2) (C_seq C e2) ae
-  | cxt_finally : forall C e1 e2 ae,
-      decompose e1 C ae ->
-      decompose (exp_finally e1 e2) (C_finally C e2) ae
-  | cxt_obj  : forall vs es k e C e' (are_vals : Forall val (values vs)),
-      decompose e C e' ->
-      decompose (exp_obj (vs++(k,e)::es)) (C_obj vs k C es) e'
-  | cxt_getfield1 : forall o f C ae,
-      decompose o C ae ->
-      decompose (exp_getfield o f) (C_getfield1 C f) ae
-  | cxt_getfield2 : forall o f C ae,
+      E e2 C ae ->
+      E (exp_set e1 e2) (C_setref2 e1 C) ae
+  | E_throw : forall e C ae,
+      E e C ae ->
+      E (exp_throw e) (C_throw C) ae
+  | E_catch : forall e1 e2 C ae,
+      E e1 C ae ->
+      E (exp_catch e1 e2) (C_catch C e2) ae
+  | E_seq : forall C e1 e2 ae,
+      E e1 C ae ->
+      E (exp_seq e1 e2) (C_seq C e2) ae
+  | E_finally : forall C e1 e2 ae,
+      E e1 C ae ->
+      E (exp_finally e1 e2) (C_finally C e2) ae
+  | E_obj  : forall vs es k e C e' (are_vals : Forall val (values vs)),
+      E e C e' ->
+      E (exp_obj (vs++(k,e)::es)) (C_obj vs k C es) e'
+  | E_getfield1 : forall o f C ae,
+      E o C ae ->
+      E (exp_getfield o f) (C_getfield1 C f) ae
+  | E_getfield2 : forall o f C ae,
       val o ->
-      decompose f C ae ->
-      decompose (exp_getfield o f) (C_getfield2 o C) ae
-  | cxt_setfield1 : forall o f e C ae,
-      decompose o C ae ->
-      decompose (exp_setfield o f e) (C_setfield1 C f e) ae
-  | cxt_setfield2 : forall o f e C ae,
+      E f C ae ->
+      E (exp_getfield o f) (C_getfield2 o C) ae
+  | E_setfield1 : forall o f e C ae,
+      E o C ae ->
+      E (exp_setfield o f e) (C_setfield1 C f e) ae
+  | E_setfield2 : forall o f e C ae,
       val o ->
-      decompose f C ae ->
-      decompose (exp_setfield o f e) (C_setfield2 o C e) ae
-  | cxt_setfield3 : forall o f e C ae,
+      E f C ae ->
+      E (exp_setfield o f e) (C_setfield2 o C e) ae
+  | E_setfield3 : forall o f e C ae,
       val o -> val f ->
-      decompose e C ae ->
-      decompose (exp_setfield o f e) (C_setfield3 o f C) ae
-  | cxt_delfield1 : forall o f C ae,
-      decompose o C ae ->
-      decompose (exp_delfield o f) (C_delfield1 C f) ae
-  | cxt_delfield2 : forall o f C ae,
+      E e C ae ->
+      E (exp_setfield o f e) (C_setfield3 o f C) ae
+  | E_delfield1 : forall o f C ae,
+      E o C ae ->
+      E (exp_delfield o f) (C_delfield1 C f) ae
+  | E_delfield2 : forall o f C ae,
       val o ->
-      decompose f C ae ->
-      decompose (exp_delfield o f) (C_delfield2 o C) ae
+      E f C ae ->
+      E (exp_delfield o f) (C_delfield2 o C) ae
 .
 
 Fixpoint plug (e : exp) (cxt : C) := match cxt with
@@ -559,32 +559,32 @@ Inductive red :  exp -> exp -> Prop :=
 Inductive step : sto -> exp -> sto -> exp -> Prop :=
   | step_red : forall s e C ae e',
     lc e ->
-    decompose e C ae ->
+    E e C ae ->
     red ae e' ->
     step s e s (plug e' C)
   | step_ref : forall C e v l s (pf : val v),
     lc e ->
-    decompose e C (exp_ref v) ->
+    E e C (exp_ref v) ->
     ~ In l (map (@fst AtomEnv.key stored_val) (AtomEnv.elements s)) ->
     step s e (AtomEnv.add l (val_with_proof pf) s) (plug (exp_loc l) C)
   | step_deref : forall e s C l v (pf : val v),
     lc e ->
-    decompose e C (exp_deref (exp_loc l)) ->
+    E e C (exp_deref (exp_loc l)) ->
     AtomEnv.find l s = Some (val_with_proof pf) ->
     step s e s (plug v C)
   | step_deref_err : forall e s C l,
     lc e ->
-    decompose e C (exp_deref (exp_loc l)) ->
+    E e C (exp_deref (exp_loc l)) ->
     AtomEnv.find l s = None ->
     step s e s (plug exp_err C)
   | step_setref : forall s e C l v v_old (pf_v : val v) (pf_v_old : val v_old),
     lc e ->
-    decompose e C (exp_set (exp_loc l) v) ->
+    E e C (exp_set (exp_loc l) v) ->
     AtomEnv.find l s = Some (val_with_proof pf_v_old) ->
     step s e (AtomEnv.add l (val_with_proof pf_v) s) (plug (exp_loc l) C)
   | step_setref_err : forall s e C l v,
     lc e ->
-    decompose e C (exp_set (exp_loc l) v) ->
+    E e C (exp_set (exp_loc l) v) ->
     AtomEnv.find l s = None ->
     step s e s (plug exp_err C)
   | step_err : forall x v s,
@@ -601,7 +601,7 @@ Definition preservation := forall sto1 e1 sto2 e2,
   step sto1 e1 sto2 e2 -> 
   lc e2.
 
-Hint Constructors exp lc' val tagof tag stored_val C E' F G ae decompose red step.
+Hint Constructors exp lc' val tagof tag stored_val C E' F G ae E red step.
 Hint Unfold values fieldnames map_values open lc.
 
 End Make.
