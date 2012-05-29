@@ -380,7 +380,7 @@ decompose_cases (induction H) Case; simpl; try (auto || rewrite -> IHdecompose; 
 Qed.
 
 Ltac destruct_decomp e := match goal with
-  |  [ H : exists E : E, exists ae : exp, decompose e E ae |- _ ] =>
+  |  [ H : exists E : C, exists ae : exp, decompose e E ae |- _ ] =>
        destruct H as [E [ae H]]
   | _ => fail
 end.
@@ -430,10 +430,10 @@ Ltac solve_break_err H e :=
   let HE := fresh "HE" in 
     destruct H as [HV | HE]; [idtac | destruct_decomp e; eauto 7];
     subst; eauto; inversion HV; clear HV; eauto; 
-      [ right; exists E_hole; eapply ex_intro; apply cxt_hole; 
+      [ right; exists C_hole; eapply ex_intro; apply cxt_hole; 
         try solve [apply redex_err_bubble; auto | constructor; auto]
       | subst
-      | right; exists E_hole; eapply ex_intro; apply cxt_hole; 
+      | right; exists C_hole; eapply ex_intro; apply cxt_hole; 
         match goal with 
         | [ H: exp_break ?x ?v = _ |- _] => try solve [apply redex_break with x v; auto; constructor; auto| constructor; auto]
         end]. 
@@ -463,9 +463,9 @@ Case "lc_bvar".
   inversion H.
 Case "lc_break".
   inversion IH. 
-    inversion H0. right. exists E_hole. eapply ex_intro. apply cxt_hole. apply redex_err_bubble... left...
+    inversion H0. right. exists C_hole. eapply ex_intro. apply cxt_hole. apply redex_err_bubble... left...
     right. eapply ex_intro; eapply ex_intro; apply cxt_hole. eapply redex_break...
-  destruct_decomp e. right; exists (E_break x E); exists ae; auto.
+  destruct_decomp e. right; exists (C_break x E); exists ae; auto.
 Case "lc_obj".
   assert (forall x : string * exp, In x l -> decidable (val (snd x))). intros; apply decide_val.
   assert (Split := (take_while l (fun kv => val (snd kv)) H1)).
@@ -485,16 +485,16 @@ Case "lc_obj".
     inversion H6. 
       SSCase "e is a val'". invert_val'; subst.
         SSSCase "e is exp_err". right.
-          exists E_hole. eapply ex_intro. apply cxt_hole. constructor. apply LC.
+          exists C_hole. eapply ex_intro. apply cxt_hole. constructor. apply LC.
           constructor. constructor; auto.
         SSSCase "e is a val". contradiction. 
         SSSCase "e is a break".
           right.
-          exists E_hole. eapply ex_intro. apply cxt_hole. 
+          exists C_hole. eapply ex_intro. apply cxt_hole. 
           apply redex_break with (x := x2) (v := v). trivial.
           constructor. constructor. trivial. auto.
       SSCase "e is not a val'".
-        inversion H7. inversion H8. right. exists (E_obj x s x2 x0). exists x3. 
+        inversion H7. inversion H8. right. exists (C_obj x s x2 x0). exists x3. 
         rewrite H2. apply cxt_obj...
 Qed.
 
@@ -735,7 +735,7 @@ unfold lc in *.
 destruct H0. (* step_cases (destruct H0) Case.  *)
 Case "step_red".
   apply lc_red in H2... apply lc_plug with (ae := ae0) (e := e)...
-  apply lc_active. apply decompose_ae with (e := e) (E := E0)...
+  apply lc_active. apply decompose_ae  with (e := e) (E := C0)...
 Case "step_ref".
   apply lc_plug with (e := e) (ae := exp_ref v)...
 Case "step_deref".
