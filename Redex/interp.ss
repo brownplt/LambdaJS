@@ -1,5 +1,5 @@
 #lang scheme
-;;; A meta-circular interpreter for λJS.
+;;; An interpreter for λJS.
 ;;; Written by Arjun Guha and Claudiu Saftoiu
 ;;;
 ;;; Tested with PLT Scheme v4.2.2
