@@ -17,7 +17,7 @@ For a more technical introduction, see our ECOOP 2010 paper on LambdaJS:
 - Redex/ contains our mechanized semantics in PLT Redex.  Tested with 
   Racket 5.2.
 
-- LambdaJS/ contains an implementation of desugaring.  Tested with GHC 7.0.4.
+- haskell/ contains an implementation of desugaring.  Tested with GHC 7.0.4.
   This software uses packages available on Hackage.
 
 - DisableXHR/ contains an implementation of our safe-subset example.  Tested
