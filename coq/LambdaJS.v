@@ -26,8 +26,45 @@ Module LC (Import Atom : ATOM) (Import String : STRING).
 Module Import Defs := LambdaJS_Defs.Make (Atom) (String).
 Require Import LambdaJS_Tactics.
 
-
 Section Definitions.
+
+Inductive ae : exp -> Prop :=
+  | redex_app  : forall e1 e2, val e1 -> val e2 -> ae (exp_app e1 e2)
+  | redex_succ : forall e, val e -> ae (exp_succ e)
+  | redex_not  : forall e, val e -> ae (exp_not e)
+  | redex_if   : forall e e1 e2, 
+      val e -> lc e1 -> lc e2 -> ae (exp_if e e1 e2)
+  | redex_label : forall x v, val v -> ae (exp_label x v)
+   | redex_label_match_and_mismatch : forall x y v,
+       val v ->
+       ae (exp_label x (exp_break y v))
+   | redex_break : forall x e v, 
+     val v -> 
+     G e (exp_break x v) ->
+     ae e
+  | redex_ref   : forall v, val v -> ae (exp_ref v)
+  | redex_deref : forall v, val v -> ae (exp_deref v)
+  | redex_set  : forall v1 v2, val v1 -> val v2 -> ae (exp_set v1 v2)
+  | redex_uncatch : forall v e, val v -> lc' 1 e -> ae (exp_catch v e)
+  | redex_catch : forall e, lc' 1 e -> ae (exp_catch exp_err e)
+  | redex_throw : forall v, val v -> ae (exp_throw v)
+  | redex_seq   : forall v e, val v -> lc e -> ae (exp_seq v e)
+  | redex_finally : forall v e, val v -> lc e -> ae (exp_finally v e)
+  | redex_finally_err : forall e , lc e -> ae (exp_finally exp_err e)
+  | redex_finally_break : forall x v e, 
+      val v -> 
+      lc e -> 
+       ae (exp_finally (exp_break x v) e)
+  | redex_err_bubble : forall e,
+      lc e ->
+      F e exp_err ->
+      ae e
+  | redex_getfield : forall o f, val o -> val f -> ae (exp_getfield o f)
+  | redex_setfield : forall o f e, val o -> val f -> val e -> ae (exp_setfield o f e)
+  | redex_delfield : forall o f, val o -> val f -> ae (exp_delfield o f)
+.
+
+Hint Constructors ae.
 
 Definition exp_ind := fun (P : exp -> Prop)
   (rec_exp_fvar : forall a : atom, P (exp_fvar a))
@@ -364,11 +401,6 @@ End Definitions.
 Hint Resolve lc_val.
 Hint Resolve lc_ascend.
 
-Lemma E_ae : forall e C e',
-  E e C e' -> ae e'.
-Proof with auto. intros. induction H... Qed.
-
-
 Lemma val_injective : forall e1 e2, e1 = e2 -> (val e1 <-> val e2).
 Proof with eauto. intros; subst... tauto. Qed.
 
@@ -380,12 +412,14 @@ E_cases (induction H) Case; simpl; try (auto || rewrite -> IHE; auto).
 Qed.
 
 Ltac destruct_decomp e := match goal with
-  |  [ H : exists E : C, exists ae : exp, Defs.E e E ae |- _ ] =>
-       destruct H as [E [ae H]]
+  |  [ H : exists E : C, exists e' : exp, Defs.E e E e' /\ ae e' |- _ ] =>
+     let E := fresh "E" in
+     let e' := fresh "e" in
+     let HE := fresh "HE" in
+     let Hae := fresh "Hae" in
+       destruct H as [E [e' [HE Hae]]]
   | _ => fail
 end.
-
-
 
 Lemma E_lc : forall C e ae,
   lc e ->
@@ -408,7 +442,7 @@ Inductive val' : exp -> Prop :=
 Lemma lc_val' : forall v, val' v -> lc' 0 v.
 Proof with auto. intros. inversion H... Qed.
 
-Hint Constructors val'.
+Hint Constructors val' ae.
 
 Ltac clean_decomp := repeat match goal with
   | [ H1 : ?cond, IH : ?cond -> ?exp |- _ ] => let H := fresh "IH" in
@@ -430,24 +464,24 @@ Ltac solve_break_err H e :=
   let HE := fresh "HE" in 
     destruct H as [HV | HE]; [idtac | destruct_decomp e; eauto 7];
     subst; eauto; inversion HV; clear HV; eauto; 
-      [ right; exists C_hole; eapply ex_intro; apply E_hole; 
+      [ right; exists C_hole; eapply ex_intro; split; (* apply E_hole;  *)
         try solve [apply redex_err_bubble; auto | constructor; auto]
       | subst
-      | right; exists C_hole; eapply ex_intro; apply E_hole; 
+      | right; exists C_hole; eapply ex_intro; split; (* apply E_hole;  *)
         match goal with 
         | [ H: exp_break ?x ?v = _ |- _] => try solve [apply redex_break with x v; auto; constructor; auto| constructor; auto]
         end]. 
 
 Lemma decomp : forall e,
   lc e -> val' e \/ 
-          (exists C, exists ae, E e C ae).
+          (exists C, exists e', E e C e' /\ ae e').
 Proof with eauto 7.
 intros.
 unfold lc in H.
 remember 0.
 remember H as LC. clear HeqLC.
 move H after LC.
-lc_cases (induction H) Case; intros; subst; clean_decomp; try solve [inversion LC; subst; repeat match goal with
+lc_cases (induction H) Case; intros; subst; clean_decomp; inversion LC; subst; repeat match goal with
 |  [ H :  lc' 0 ?e -> val' ?e \/ _ ,
           (* should be  val ?e' \/ (exists (E : E) (ae : exp), decomposition ?e E ae), but coq8.4 chokes on it *)
      HLC : lc' 0 ?e
@@ -458,44 +492,40 @@ lc_cases (induction H) Case; intros; subst; clean_decomp; try solve [inversion L
 | [ LC1 : lc' _ ?e1, H : val' ?e1 \/ _ |- val' (_ ?e1 _ _) \/ _ ] => solve_break_err H e1
 | [ LC2 : lc' _ ?e2, H : val' ?e2 \/ _ |- val' (_ _ ?e2 _) \/ _ ] => solve_break_err H e2
 | [ LC3 : lc' _ ?e3, H : val' ?e3 \/ _ |- val' (_ _ _ ?e3) \/ _ ] => solve_break_err H e3
-end; eauto 7].
+end; eauto 7. 
 Case "lc_bvar".
   inversion H.
 Case "lc_break".
   inversion IH. 
-    inversion H0. right. exists C_hole. eapply ex_intro. apply E_hole. apply redex_err_bubble... left...
-    right. eapply ex_intro; eapply ex_intro; apply E_hole. eapply redex_break...
-  destruct_decomp e. right; exists (C_break x C); exists ae; auto.
+    inversion H0. right. exists C_hole. eapply ex_intro. split. apply E_hole. apply redex_err_bubble... left...
+    subst.
+    right. eapply ex_intro. eapply ex_intro. split. apply E_hole. eapply redex_break...
+    destruct_decomp e. right. exists (C_break x E0). exists e0; auto.
 Case "lc_obj".
+  clear H2.
   assert (forall x : string * exp, In x l -> decidable (val (snd x))). intros; apply decide_val.
   assert (Split := (take_while l (fun kv => val (snd kv)) H1)).
   inversion Split. 
   SCase "Everything in (exp_obj l) is already a value".
     left. constructor. constructor... unfold values; rewrite map_snd_snd_split. apply forall_snd_comm...
   SCase "Something in (exp_obj l) is not yet a value".
-    inversion_clear H2. inversion_clear H3. 
-    inversion_clear H2. inversion_clear H3. inversion_clear H4.
-    remember x1 as x1'; destruct x1'.
-    assert (Forall val (values x)). unfold values; rewrite map_snd_snd_split; apply forall_snd_comm...
-    assert (val' e \/ (exists C, exists ae, E e C ae)).   
-      inversion LC. rewrite H2 in H0. rewrite map_snd_snd_split in H0. rewrite snd_split_comm in H0.
-      simpl in H0. rewrite forall_app in H0. inversion_clear H0. inversion_clear H11.
-      apply H0... rewrite Forall_forall in H9; apply H9. subst. unfold values. 
-      rewrite map_snd_snd_split. rewrite snd_split_comm. simpl. apply in_middle. 
-    inversion H6. 
-      SSCase "e is a val'". invert_val'; subst.
-        SSSCase "e is exp_err". right.
-          exists C_hole. eapply ex_intro. apply E_hole. constructor. apply LC.
-          constructor. constructor; auto.
-        SSSCase "e is a val". contradiction. 
-        SSSCase "e is a break".
-          right.
-          exists C_hole. eapply ex_intro. apply E_hole. 
-          apply redex_break with (x := x2) (v := v). trivial.
-          constructor. constructor. trivial. auto.
-      SSCase "e is not a val'".
-        inversion H7. inversion H8. right. exists (C_obj x s x2 x0). exists x3. 
-        rewrite H2. apply E_obj...
+    destruct H2 as [L1 [L2 [[k e] [Hsubst [Hvals' Hexps]]]]]. subst.
+    assert (Forall val (values L1)) as Hvals.
+      unfold values. rewrite map_snd_snd_split. apply forall_snd_comm. exact Hvals'.
+    clear Hvals'.
+    assert (lc e) as HLCe.
+      inversion LC. subst.
+      rewrite Forall_forall in H6. apply H6. unfold values. rewrite map_app. simpl. apply in_app_iff. right. apply in_eq.
+    assert (val' e \/ (exists C, exists e', E e C e' /\ ae e')) as He.
+      rewrite map_snd_snd_split in H0. rewrite snd_split_comm in H0. simpl in H0. rewrite forall_app in H0.
+      destruct H0 as [H0 H0']. rewrite Forall_forall in H0'. apply H0'; auto with datatypes.
+    solve_break_err He e'. (* gets us most of the way *)
+      (* error *)
+      subst. constructor...
+      (* value *)
+      contradiction.
+      (* break *)
+      subst. eapply redex_break. apply H2. constructor...
 Qed.
 
 Hint Resolve E_lc.
@@ -516,60 +546,57 @@ destruct H. destruct H...
 right. right. exists exp_err. exists sto0. auto.
 destruct_decomp e...
 right. right.
-assert (Defs.ae ae). apply E_ae in H...
-
-
-inversion H0; subst...
+inversion Hae; subst...
 (* redex_cases (inversion H0) Case; subst... *)
-Case "redex_app". val_cases (inversion H1) SCase; subst; eauto 6.
-Case "redex_if". val_cases (inversion H1) SCase; subst; first [destruct b; eauto 6 | eauto 6]. 
+Case "redex_app". val_cases (inversion H) SCase; subst; eauto 6.
+Case "redex_if". val_cases (inversion H) SCase; subst; first [destruct b; eauto 6 | eauto 6]. 
 Case "redex_label_break".
   assert ({ x = y } + { ~ x = y }). apply Atom.atom_eq_dec.
-  destruct H2; subst...
+  destruct H0; subst...
 Case "redex_ref".
 assert (exists l : atom, 
           ~ In l (map (@fst AtomEnv.key stored_val) (AtomEnv.elements sto0))) 
     as [l HnotInL].
   apply Atom.atom_fresh_for_list.
-exists (plug (exp_loc l) C).
-exists (AtomEnv.add l (val_with_proof H1) sto0)...
+exists (plug (exp_loc l) E0).
+exists (AtomEnv.add l (val_with_proof H) sto0)...
 Case "redex_deref".
-val_cases (inversion H1) SCase; subst; try solve [ exists (plug exp_err C); eauto ].
+val_cases (inversion H) SCase; subst; try solve [ exists (plug exp_err E0); eauto ].
   SCase "val_loc". remember (AtomEnv.find l sto0) as MaybeV.
   destruct MaybeV...
   destruct s...
 Case "redex_set".
-val_cases (inversion H1) SCase; subst; try solve [ exists (plug exp_err C); eauto ].
+val_cases (inversion H) SCase; subst; try solve [ exists (plug exp_err E0); eauto ].
   SCase "val_loc". remember (AtomEnv.find l sto0) as MaybeV.
   destruct MaybeV...
   destruct s.
-  exists (plug (exp_loc l) C).
-  exists (AtomEnv.add l (val_with_proof H2) sto0)...
+  exists (plug (exp_loc l) E0).
+  exists (AtomEnv.add l (val_with_proof H0) sto0)...
 Case "redex_getfield".
   destruct (decide_tagof o TagObj).
-  inversion H3. destruct (decide_tagof f TagString). inversion H5. destruct (dec_in (fieldnames l) s). 
-    exists (plug (lookup_assoc l s exp_err string_eq_dec) C); exists sto0. subst; eapply step_red... 
+  inversion H1. destruct (decide_tagof f TagString). inversion H3. destruct (dec_in (fieldnames l) s). 
+    exists (plug (lookup_assoc l s exp_err string_eq_dec) E0); exists sto0. subst; eapply step_red... 
     destruct (dec_in (fieldnames l) __proto__).
-      exists (plug (exp_getfield (exp_deref (exp_getfield o (exp_string __proto__))) f) C); exists sto0. subst; eapply step_red...
-      exists (plug exp_undef C); exists sto0. subst; eapply step_red...
-    exists (plug exp_err C); exists sto0. subst; eapply step_red...
-  exists (plug exp_err C); exists sto0; subst; eapply step_red...
+      exists (plug (exp_getfield (exp_deref (exp_getfield o (exp_string __proto__))) f) E0); exists sto0. subst; eapply step_red...
+      exists (plug exp_undef E0); exists sto0. subst; eapply step_red...
+    exists (plug exp_err E0); exists sto0. subst; eapply step_red...
+  exists (plug exp_err E0); exists sto0; subst; eapply step_red...
 Case "redex_setfield".
   destruct (decide_tagof o TagObj).
-  inversion H4. destruct (decide_tagof f TagString). inversion H6. 
+  inversion H2. destruct (decide_tagof f TagString). inversion H4. 
     destruct (dec_in (fieldnames l) s).
-      exists (plug (exp_obj (update_assoc l s e0 string_eq_dec)) C); exists sto0. subst; eapply step_red...
-      exists (plug (exp_obj ((s,e0)::l)) C); exists sto0. subst; eapply step_red...
-    exists (plug exp_err C); exists sto0. subst; eapply step_red...
-  exists (plug exp_err C); exists sto0; subst; eapply step_red...
+      exists (plug (exp_obj (update_assoc l s e1 string_eq_dec)) E0); exists sto0. subst; eapply step_red...
+      exists (plug (exp_obj ((s,e1)::l)) E0); exists sto0. subst; eapply step_red...
+    exists (plug exp_err E0); exists sto0. subst; eapply step_red...
+  exists (plug exp_err E0); exists sto0; subst; eapply step_red...
 Case "redex_delfield".
   destruct (decide_tagof o TagObj).
-  inversion H3. destruct (decide_tagof f TagString). inversion H5.
+  inversion H1. destruct (decide_tagof f TagString). inversion H3.
     destruct (dec_in (fieldnames l) s). 
-      exists (plug (exp_obj (remove_fst s l string_eq_dec)) C); exists sto0. subst; eapply step_red... 
-      exists (plug o C); exists sto0. subst; eapply step_red...
-    exists (plug exp_err C); exists sto0; subst; eapply step_red...
-  exists (plug exp_err C); exists sto0; subst; eapply step_red...
+      exists (plug (exp_obj (remove_fst s l string_eq_dec)) E0); exists sto0. subst; eapply step_red... 
+      exists (plug o E0); exists sto0. subst; eapply step_red...
+    exists (plug exp_err E0); exists sto0; subst; eapply step_red...
+  exists (plug exp_err E0); exists sto0; subst; eapply step_red...
 Qed.
 
 Ltac solve_lc_plug := match goal with
@@ -599,21 +626,6 @@ Case "E_obj".
 Qed.
 
 Hint Resolve lc_plug.
-
-Lemma lc_active : forall e,
-  ae e -> lc e.
-Proof with eauto.
-  intros.
-  remember H.
-  unfold lc.
-  clear Heqa.
-  inversion a; try solve [constructor; eauto using lc_val].
-
-  subst. inversion H1; subst... inversion H2; subst...
-  trivial.
-Qed.
-
-Hint Resolve lc_active.
 
 Lemma lc_open : forall k e u,
   lc' (S k) e ->
@@ -735,7 +747,7 @@ unfold lc in *.
 destruct H0. (* step_cases (destruct H0) Case.  *)
 Case "step_red".
   apply lc_red in H2... apply lc_plug with (ae := ae0) (e := e)...
-  apply lc_active. apply E_ae  with (e := e) (C := C0)...
+  apply E_lc with (C := C0) (e := e)...
 Case "step_ref".
   apply lc_plug with (e := e) (ae := exp_ref v)...
 Case "step_deref".

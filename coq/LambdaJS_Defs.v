@@ -302,45 +302,8 @@ Inductive G : exp -> exp -> Prop :=
        lc' 1 e2 ->
        G (exp_catch e1 e2) e1.
 
-Inductive ae : exp -> Prop :=
-  | redex_app  : forall e1 e2, val e1 -> val e2 -> ae (exp_app e1 e2)
-  | redex_succ : forall e, val e -> ae (exp_succ e)
-  | redex_not  : forall e, val e -> ae (exp_not e)
-  | redex_if   : forall e e1 e2, 
-      val e -> lc e1 -> lc e2 -> ae (exp_if e e1 e2)
-  | redex_label : forall x v, val v -> ae (exp_label x v)
-   | redex_label_match_and_mismatch : forall x y v,
-       val v ->
-       ae (exp_label x (exp_break y v))
-   | redex_break : forall x e v, 
-     val v -> 
-     G e (exp_break x v) ->
-     ae e
-  | redex_ref   : forall v, val v -> ae (exp_ref v)
-  | redex_deref : forall v, val v -> ae (exp_deref v)
-  | redex_set  : forall v1 v2, val v1 -> val v2 -> ae (exp_set v1 v2)
-  | redex_uncatch : forall v e, val v -> lc' 1 e -> ae (exp_catch v e)
-  | redex_catch : forall e, lc' 1 e -> ae (exp_catch exp_err e)
-  | redex_throw : forall v, val v -> ae (exp_throw v)
-  | redex_seq   : forall v e, val v -> lc e -> ae (exp_seq v e)
-  | redex_finally : forall v e, val v -> lc e -> ae (exp_finally v e)
-  | redex_finally_err : forall e , lc e -> ae (exp_finally exp_err e)
-  | redex_finally_break : forall x v e, 
-      val v -> 
-      lc e -> 
-       ae (exp_finally (exp_break x v) e)
-  | redex_err_bubble : forall e,
-      lc e ->
-      F e exp_err ->
-      ae e
-  | redex_getfield : forall o f, val o -> val f -> ae (exp_getfield o f)
-  | redex_setfield : forall o f e, val o -> val f -> val e -> ae (exp_setfield o f e)
-  | redex_delfield : forall o f, val o -> val f -> ae (exp_delfield o f)
-.
-
 Inductive E : exp -> C -> exp -> Prop :=
   | E_hole : forall e,
-      ae e ->
       E e C_hole e
   | E_app_1 : forall C e1 e2 e',
       E e1 C e' ->
@@ -601,7 +564,7 @@ Definition preservation := forall sto1 e1 sto2 e2,
   step sto1 e1 sto2 e2 -> 
   lc e2.
 
-Hint Constructors exp lc' val tagof tag stored_val C E' F G ae E red step.
+Hint Constructors exp lc' val tagof tag stored_val C E' F G E red step.
 Hint Unfold values fieldnames map_values open lc.
 
 End Make.
