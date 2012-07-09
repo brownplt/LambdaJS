@@ -18,7 +18,6 @@ Require Export Arith.EqNat.  (* Contains [beq_nat], among other things *)
 
 (** * From Basics.v *)
 
-Definition admit {T: Type} : T.  Admitted.
 
 Require String. Open Scope string_scope.
 
@@ -67,16 +66,6 @@ Proof.
   Case "b = false".
     rewrite <- H. reflexivity.  Qed.
 
-Theorem andb_true_elim2 : forall b c,
-  andb b c = true -> c = true.
-Proof.
-(* An exercise in Basics.v *)
-Admitted.
-
-Theorem beq_nat_sym : forall (n m : nat),
-  beq_nat n m = beq_nat m n.
-(* An exercise in Lists.v *)
-Admitted.
 
 (* From Poly.v *)
 
@@ -103,34 +92,12 @@ Proof.
       inversion H.
     inversion H.  Qed.
 
-Theorem not_eq_beq_false : forall n n' : nat,
-     n <> n' ->
-     beq_nat n n' = false.
-Proof. 
-(* An exercise in Logic.v *)
-Admitted.
 
 Theorem ex_falso_quodlibet : forall (P:Prop),
   False -> P.
 Proof.
   intros P contra.
   inversion contra.  Qed.
-
-Theorem ev_not_ev_S : forall n,
-  ev n -> ~ ev (S n).
-Proof. 
-(* An exercise in Logic.v *)
-Admitted.
-
-Theorem ble_nat_true : forall n m,
-  ble_nat n m = true -> n <= m.
-(* An exercise in Logic.v *)
-Admitted.
-
-Theorem ble_nat_false : forall n m,
-  ble_nat n m = false -> ~(n <= m).
-(* An exercise in Logic.v *)
-Admitted.
 
 Inductive appears_in (n : nat) : list nat -> Prop :=
 | ai_here : forall l, appears_in n (n::l)
@@ -170,15 +137,6 @@ Proof.
   intros X R x y r.
   apply rsc_step with y. apply r. apply rsc_refl.   Qed.
 
-Theorem rsc_trans :
-  forall (X:Type) (R: relation X) (x y z : X),
-      refl_step_closure R x y  ->
-      refl_step_closure R y z ->
-      refl_step_closure R x z.
-Proof.
-  (* FILL IN HERE *) Admitted.
-
-
 (* Identifiers and polymorphic partial maps. *)
 Inductive id : Type := 
   Id : nat -> id.
@@ -209,21 +167,6 @@ Proof.
   destruct i1. destruct i2.
   apply beq_nat_false in H.
   intros C. apply H. inversion C. reflexivity.  Qed.
-
-Theorem not_eq_beq_id_false : forall i1 i2,
-  i1 <> i2 -> beq_id i1 i2 = false.
-Proof.
-  intros i1 i2 H.
-  destruct i1. destruct i2.
-  assert (n <> n0).
-    intros C. subst. apply H. reflexivity.
-  apply not_eq_beq_false. assumption.  Qed.
-
-Theorem beq_id_sym: forall i1 i2,
-  beq_id i1 i2 = beq_id i2 i1.
-Proof.
-  intros i1 i2. destruct i1. destruct i2. apply beq_nat_sym. Qed.
-
 
 Definition partial_map (A:Type) := id -> option A.
 
