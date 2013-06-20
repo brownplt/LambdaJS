@@ -22,7 +22,7 @@ import qualified Data.Set as S
 import Data.Set (Set)
 import Data.List
 import Text.ParserCombinators.Parsec.Pos (SourcePos)
-import BrownPLT.JavaScript.Syntax
+import Language.ECMAScript3.Syntax
 import Language.LambdaJS.Syntax
 import Language.LambdaJS.LocalVars
 import Language.LambdaJS.LiftFuncStmts
@@ -313,7 +313,6 @@ expr env e = case e of
       OpAssignBXor -> OpBXor
       OpAssignBOr -> OpBOr
       OpAssign -> error "Haskell has gone haywire."
-  ParenExpr _ e1 -> expr env e1
   ListExpr _ [] -> error "Desugar.hs: expr got empty ListExpr"
   ListExpr _ [e'] -> expr env e'
   ListExpr a (e':es) -> ESeq a (expr env e') (expr env (ListExpr a es))
@@ -327,13 +326,13 @@ expr env e = case e of
           (EThrow nopos $ newError "TypeError" "CallExpr given non-function")
           (applyObj (EId nopos "$obj") (EId nopos "$global") (map (expr env) es))
   --TODO: don't just ignore mname                            
-  FuncExpr a mname ids unliftedStmt -> 
+  FuncExpr a mname ids unliftedStmts -> 
     ERef a $ EObject nopos [("$code", code), 
                             ("arguments", arguments),
                             ("prototype", prototype),
                             ("$strRep", EString nopos strRep),
                             ("$proto", EId nopos "@Function_prototype")]
-      where s = BlockStmt a (liftFuncStmts [unliftedStmt])
+      where s = BlockStmt a (liftFuncStmts unliftedStmts)
             arg x ix = case x `S.member` assignableArgs of
               True -> ERef a $ EGetField nopos (EDeref nopos $ EDeref nopos (EId nopos "arguments"))
                                        (EString nopos $ show ix)
@@ -356,7 +355,7 @@ expr env e = case e of
             vars = localVars s
             locals = map (\x -> (x, (ERef nopos) (EUndefined nopos))) vars
             argSet = S.fromList (map unId ids)
-            assignable = assignableVars unliftedStmt
+            assignable = S.unions (map assignableVars unliftedStmts)
             assignableArgs = argSet `S.intersection` assignable
             pureArgs = argSet `S.difference` assignableArgs
             env' = M.unions $
@@ -462,7 +461,9 @@ stmt env s = case s of
     error $ "Desugar.hs : expected FunctionStmt at " ++ show p
   WithStmt _ obj body -> desugarWith (toObject $ expr env obj) (stmt env body)
   ForInStmt a (ForInVar (Id p x)) e s -> forin a p x e s
-  ForInStmt a (ForInNoVar (Id p x)) e s -> forin a p x e s
+  -- TODO(arjun): arbitrary L-val allowed?
+  ForInStmt a (ForInLVal (LVar p x)) e s -> forin a p x e s
+
   DoWhileStmt a s e ->
     let s' = stmt env s
         e' = expr env e

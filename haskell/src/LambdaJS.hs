@@ -4,11 +4,11 @@ import Language.LambdaJS.Parser (parseBinds)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
-import BrownPLT.JavaScript.Syntax (JavaScript (..))
-import BrownPLT.JavaScript.Parser (parseScriptFromString, parseBlockStmt, 
+import Language.ECMAScript3.Syntax (JavaScript (..))
+import Language.ECMAScript3.Parser (parseScriptFromString, parseBlockStmt, 
   parseExpression, parseJavaScriptFromFile)
 import Text.ParserCombinators.Parsec
-import BrownPLT.JavaScript.Lexer (reservedOp, whiteSpace)
+import Language.ECMAScript3.Lexer (reservedOp, whiteSpace)
 import Language.LambdaJS.PrettyPrint
 import Language.LambdaJS.Syntax
 import Language.LambdaJS.Desugar
@@ -34,7 +34,6 @@ desugarMain opts = do
       exitFailure
 
 
-testCase :: CharParser st Doc
 testCase = do
   srcLoc <- getPosition
   testStmt <- parseBlockStmt
@@ -49,7 +48,6 @@ testCase = do
   return $ parens (src <+> renderExpr lhs <+> renderExpr rhs)
 
 
-testCases :: CharParser st Doc
 testCases = do
   whiteSpace
   tests <- many testCase
@@ -64,7 +62,7 @@ getEnvTransformer fileName = do
 
 testCaseMain [] = do
   src <- getContents
-  case parse testCases "stdin" src of
+  case runParser testCases [] "stdin" src of
     Left err -> putStrLn (show err)
     Right tests -> putStrLn (render tests)
 testCaseMain _ =

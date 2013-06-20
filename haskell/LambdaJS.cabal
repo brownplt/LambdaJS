@@ -22,7 +22,7 @@ Library
     pretty >= 0.1, 
     containers >= 0.1,
     syb >= 0.1,
-    WebBits >= 2.1
+    language-ecmascript
   ghc-options:
     -fwarn-incomplete-patterns 
   Extensions:     
@@ -50,7 +50,7 @@ Executable lambdaJS
     pretty >= 0.1, 
     containers >= 0.1,
     syb >= 0.1,
-    WebBits >= 2.1
+    language-ecmascript
   ghc-options:
     -fwarn-incomplete-patterns -rtsopts
   Extensions:     

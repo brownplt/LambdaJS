@@ -5,7 +5,7 @@ module Language.LambdaJS.LiftFuncStmts
   ) where
 
 import Language.LambdaJS.Prelude
-import BrownPLT.JavaScript
+import Language.ECMAScript3
 import Data.Generics
 
 isFuncExpr :: Expression SourcePos -> Bool

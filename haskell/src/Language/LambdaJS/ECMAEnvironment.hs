@@ -5,8 +5,8 @@ module Language.LambdaJS.ECMAEnvironment
 import Language.LambdaJS.Desugar
 import Language.LambdaJS.Syntax
 import Text.ParserCombinators.Parsec
-import BrownPLT.JavaScript.Syntax (InfixOp (..), PrefixOp (..))
-import BrownPLT.JavaScript.Parser (parseExpression)
+import Language.ECMAScript3.Syntax (InfixOp (..), PrefixOp (..))
+import Language.ECMAScript3.Parser (parseExpression)
 import qualified Data.Map as M
 
 --15.4.5.1:
@@ -364,7 +364,7 @@ objectPrototypeValues =
 
 nativeFunctionStrRep name = "function "++name++"() {\n    [native code]\n}"
 --various algorithms that are more easily expressed as js:  
-parseSrc src = case parse parseExpression "<built-in>" src of
+parseSrc src = case runParser parseExpression [] "<built-in>" src of
   Right x -> x
   Left y -> error $ "Error parsing built-in src: " ++ (show y)
 

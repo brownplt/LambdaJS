@@ -3,7 +3,7 @@ module Language.LambdaJS.AssignableVars
   ) where
 
 import Language.LambdaJS.Prelude
-import BrownPLT.JavaScript.Syntax
+import Language.ECMAScript3.Syntax
 import qualified Data.Set as S
 
 
@@ -67,10 +67,9 @@ expr e = case e of
   CondExpr _ e1 e2 e3 -> unions [expr e1, expr e2, expr e3]
   AssignExpr _ _ lv e -> unions [lvalue lv, expr e]
   UnaryAssignExpr _ _ lv -> lvalue lv
-  ParenExpr _ e -> expr e
   ListExpr _ es -> unions (map expr es)
   CallExpr _ e es -> unions [expr e, unions $ map expr es]
-  FuncExpr _ _ args s -> nest $ unions [unions $ map decl args, stmt s]
+  FuncExpr _ _ args s -> nest $ unions [unions $ map decl args, stmts s]
 
 
 caseClause :: CaseClause SourcePos -> Partial
@@ -97,8 +96,10 @@ forInit fi = case fi of
 
 forInInit :: ForInInit SourcePos -> Partial
 forInInit (ForInVar id) = assign (unId id) +++ decl id
-forInInit (ForInNoVar id) = assign (unId id)
+-- TODO(arjun): seriously? arbitrary l-value?
+forInInit (ForInLVal lv) = lvalue lv
 
+stmts = unions . map stmt
   
 stmt :: Statement SourcePos -> Partial
 stmt s = case s of
@@ -123,7 +124,7 @@ stmt s = case s of
   WithStmt _ e s -> unions [expr e, stmt s]
   VarDeclStmt _ decls -> unions $ map varDecl decls
   FunctionStmt _ fnId args s ->
-    unions [decl fnId, nest $ unions [unions $ map decl args, stmt s]]
+    unions [decl fnId, nest $ unions [unions $ map decl args, stmts s]]
 
 
 assignable :: Partial -> Set String

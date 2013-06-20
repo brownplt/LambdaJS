@@ -2,7 +2,7 @@ module Language.LambdaJS.LocalVars
   ( localVars
   ) where
 
-import BrownPLT.JavaScript.Syntax
+import Language.ECMAScript3.Syntax
 
 varDecl :: VarDecl a -> Id a
 varDecl (VarDecl a x _ ) = x
