@@ -15,16 +15,16 @@ Require Import Coq.FSets.FMapList.
 Require Import Coq.Strings.String.
 Require Import Coq.Logic.Decidable.
 Require Import Omega.
-Require Import SfLib.
-Require Import ListExt.
-Require Import Datatypes.
-Require LambdaJS_Defs.
+From Top Require Import SfLib.
+From Top Require Import ListExt.
+From Top Require Import Datatypes.
+From Top Require LambdaJS_Defs.
 Set Implicit Arguments.
 
 Module LC (Import Atom : ATOM) (Import String : STRING).
 
 Module Import Defs := LambdaJS_Defs.Make (Atom) (String).
-Require Import LambdaJS_Tactics.
+From Top Require Import LambdaJS_Tactics.
 
 Section Definitions.
 
@@ -222,40 +222,40 @@ Definition lc'_ind := fun (P : nat -> exp -> Prop)
 fix lc'_ind' (n : nat) (e : exp) (l : lc' n e) {struct l} : P n e :=
   match l in (lc' n0 e0) return (P n0 e0) with
   | lc_fvar n0 a => rec_lc_fvar n0 a
-  | lc_bvar k n0 l0 => rec_lc_bvar k n0 l0
-  | lc_abs n0 e0 l0 => rec_lc_abs n0 e0 l0 (lc'_ind' (S n0) e0 l0)
-  | lc_app n0 e1 e2 l0 l1 => rec_lc_app n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
+  | @lc_bvar k n0 l0 => rec_lc_bvar k n0 l0
+  | @lc_abs n0 e0 l0 => rec_lc_abs n0 e0 l0 (lc'_ind' (S n0) e0 l0)
+  | @lc_app n0 e1 e2 l0 l1 => rec_lc_app n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
   | lc_nat n0 x => rec_lc_nat n0 x
-  | lc_succ n0 e0 l0 => rec_lc_succ n0 e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_succ n0 e0 l0 => rec_lc_succ n0 e0 l0 (lc'_ind' n0 e0 l0)
   | lc_bool n0 b => rec_lc_bool n0 b
   | lc_string n0 s => rec_lc_string n0 s
   | lc_undef n0 => rec_lc_undef n0
   | lc_null n0 => rec_lc_null n0
-  | lc_not n0 e0 l0 => rec_lc_not n0 e0 l0 (lc'_ind' n0 e0 l0)
-  | lc_if n0 e0 e1 e2 l0 l1 l2 =>
+  | @lc_not n0 e0 l0 => rec_lc_not n0 e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_if n0 e0 e1 e2 l0 l1 l2 =>
       rec_lc_if  n0 e0 e1 e2 l0 (lc'_ind' n0 e0 l0) l1 (lc'_ind' n0 e1 l1) l2 (lc'_ind' n0 e2 l2)
   | lc_err n0 => rec_lc_err n0
-  | lc_label n0 x e0 l0 => rec_lc_label n0 x e0 l0 (lc'_ind' n0 e0 l0)
-  | lc_break n0 x e0 l0 => rec_lc_break n0 x e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_label n0 x e0 l0 => rec_lc_label n0 x e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_break n0 x e0 l0 => rec_lc_break n0 x e0 l0 (lc'_ind' n0 e0 l0)
   | lc_loc n0 x => rec_lc_loc n0 x
-  | lc_ref n0 e0 l0 => rec_lc_ref n0 e0 l0 (lc'_ind' n0 e0 l0)
-  | lc_deref n0 e0 l0 => rec_lc_deref n0 e0 l0 (lc'_ind' n0 e0 l0)
-  | lc_set n0 e1 e2 l0 l1 => rec_lc_set n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
-  | lc_catch n0 e1 e2 l0 l1 =>
+  | @lc_ref n0 e0 l0 => rec_lc_ref n0 e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_deref n0 e0 l0 => rec_lc_deref n0 e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_set n0 e1 e2 l0 l1 => rec_lc_set n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
+  | @lc_catch n0 e1 e2 l0 l1 =>
       rec_lc_catch n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' (S n0) e2 l1)
-  | lc_throw n0 e0 l0 => rec_lc_throw n0 e0 l0 (lc'_ind' n0 e0 l0)
-  | lc_seq n0 e1 e2 l0 l1 => rec_lc_seq n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
-  | lc_finally n0 e1 e2 l0 l1 => rec_lc_finally n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
-  | lc_obj n0 l0 n1 pf_lc' => rec_lc_obj n0 l0 n1
+  | @lc_throw n0 e0 l0 => rec_lc_throw n0 e0 l0 (lc'_ind' n0 e0 l0)
+  | @lc_seq n0 e1 e2 l0 l1 => rec_lc_seq n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
+  | @lc_finally n0 e1 e2 l0 l1 => rec_lc_finally n0 e1 e2 l0 (lc'_ind' n0 e1 l0) l1 (lc'_ind' n0 e2 l1)
+  | @lc_obj n0 l0 n1 pf_lc' => rec_lc_obj n0 l0 n1
       ((fix forall_lc_ind T (pf_lc : Forall (lc' n0) T) : Forall (P n0) T :=
         match pf_lc with
-          | Forall_nil => Forall_nil (P n0)
-          | Forall_cons t l' isVal rest => 
-            Forall_cons (A:=exp) (P:=P n0) (l:=l') t (lc'_ind' n0 t isVal) (forall_lc_ind l' rest)
+          | Forall_nil _ => Forall_nil (P n0)
+          | @Forall_cons _ _ t l' isVal rest => 
+            @Forall_cons (exp) (P n0) t (l') (lc'_ind' n0 t isVal) (forall_lc_ind l' rest)
         end) (map (@snd string exp) l0) pf_lc')
-  | lc_getfield n0 o f lc_o lc_f  => rec_lc_getfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f)
-  | lc_setfield n0 o f e lc_o lc_f lc_e => rec_lc_setfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f) e (lc'_ind' n0 e lc_e)
-  | lc_delfield n0 o f lc_o lc_f => rec_lc_delfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f)
+  | @lc_getfield n0 o f lc_o lc_f  => rec_lc_getfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f)
+  | @lc_setfield n0 o f e lc_o lc_f lc_e => rec_lc_setfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f) e (lc'_ind' n0 e lc_e)
+  | @lc_delfield n0 o f lc_o lc_f => rec_lc_delfield n0 o (lc'_ind' n0 o lc_o) f (lc'_ind' n0 f lc_f)
   end.
 
 Definition val_ind := fun (P : exp -> Prop)
@@ -272,7 +272,7 @@ Definition val_ind := fun (P : exp -> Prop)
   (e : exp) (v : val e) =>
   fix val_ind' (e : exp) (v : val e) { struct v } : P e :=
   match v in (val e0) return (P e0) with
-    | val_abs x x0 => rec_val_abs x x0
+    | @val_abs x x0 => rec_val_abs x x0
     | val_nat x => rec_val_nat x
     | val_fvar x => rec_val_fvar x
     | val_bool x => rec_val_bool x
@@ -283,8 +283,8 @@ Definition val_ind := fun (P : exp -> Prop)
     | val_obj x pf_vals x0 => rec_val_obj x
       ((fix forall_val_ind T (pf_vals : Forall val T) : Forall P T :=
         match pf_vals with
-          | Forall_nil => Forall_nil P
-          | Forall_cons t l' isVal rest => 
+          | @Forall_nil _ _ => Forall_nil P
+          | @Forall_cons _ _ t l' isVal rest => 
             Forall_cons (A:=exp) (P:=P) (l:=l') t (val_ind' t isVal) (forall_val_ind l' rest)
         end) (map (@snd string exp) x) pf_vals) x0
   end.
