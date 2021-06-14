@@ -60,12 +60,8 @@ Theorem andb_true_elim1 : forall b c,
   andb b c = true -> b = true.
 Proof.
   intros b c H.
-  destruct b.
-  Case "b = true".
-    reflexivity.
-  Case "b = false".
-    rewrite <- H. reflexivity.  Qed.
-
+  destruct b; auto.
+Qed.
 
 (* From Poly.v *)
 
@@ -125,11 +121,7 @@ Inductive refl_step_closure (X:Type) (R: relation X)
                     R x y ->
                     refl_step_closure X R y z ->
                     refl_step_closure X R x z.
-Implicit Arguments refl_step_closure [[X]]. 
-
-Tactic Notation "rsc_cases" tactic(first) ident(c) :=
-  first;
-  [ Case_aux c "rsc_refl" | Case_aux c "rsc_step" ].
+Arguments refl_step_closure {X}.
 
 Theorem rsc_R : forall (X:Type) (R:relation X) (x y : X),
        R x y -> refl_step_closure R x y.
