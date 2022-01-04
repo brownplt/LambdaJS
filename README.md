@@ -4,7 +4,7 @@ LambdaJS
 LambdaJS is small, tested, reduction semantics for JavaScript. For a quick 
 introduction, see our blog post:
 
-  http://brownplt.github.com/2011/09/29/js-essence.html
+  https://blog.brownplt.org/2011/09/29/js-essence.html
 
 For a more technical introduction, see our ECOOP 2010 paper on LambdaJS:
 
@@ -30,7 +30,7 @@ Semantics for ECMAScript 5
 LambdaJS roughly models ECMAScript 3. The latest version of JavaScript, ECMAScript 5, is considerably more complex, so we decided to develop it from scratch.
 The following blog post describes S5, our semantics for ES5:
 
-  http://brownplt.github.com/2011/11/11/s5-javascript-semantics.html
+  https://blog.brownplt.org/2011/11/11/s5-javascript-semantics.html
 
 The code for S5 is also available:
 
